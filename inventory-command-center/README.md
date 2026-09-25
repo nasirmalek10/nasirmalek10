@@ -4,7 +4,33 @@ A single-file, fully offline inventory and point-of-sale app (`index.html`). Ope
 (file:// works; serve over http(s) only if you want Google Drive backup). Data lives in the
 browser's IndexedDB.
 
-Run the built-in test suite by opening `index.html?qa=1`: 148 automated checks.
+Run the built-in test suite by opening `index.html?qa=1`: 156 automated checks.
+
+## v1.7.0 — what changed from v1.6.0
+
+- **Per-location stock levels and a replenishment planner.** Each store gets its own minimum and
+  maximum per product (typed in, or suggested from its last 30 days of sales). *Replenish stores*
+  tops every store at or below its minimum up to its maximum. It counts stock already in transit
+  and drafts already planned, so the same need is never planned twice. When the warehouse is
+  short, stock is shared in proportion to each store's need. The result is one draft transfer
+  per store to review and dispatch. Store stock requests are suggested from the same levels.
+- **Per-user limits.** A maximum discount % per sale and a maximum value per dispatched transfer.
+  Going over needs a manager-PIN approval from someone whose own limit covers the amount, and the
+  approved amount is audited. A non-Admin user manager can't grant a higher limit than their own.
+- **Access packages between installations.** Head office exports role presets and people, with
+  their permissions, limits, end dates, locations by site code, and optionally salted PIN hashes.
+  The package is checksummed and signed like a transfer file. Each installation reviews it and
+  imports it (Admin only). People are added or updated, never deleted. The importing account is
+  never changed. Someone whose locations don't exist at that site is skipped, not given access
+  everywhere. Importing the same package again changes nothing.
+- **Outbox ZIP bundles.** Everything this installation still owes a site (unsent shipments,
+  confirmations due, new requests) goes out as one ZIP per site, by download or email. The other
+  site imports the ZIP directly, and every file inside keeps its own duplicate protection.
+- **Barcodes and scanning.** Delivery notes and pick lists print a Code 128 barcode, checked
+  against the python-barcode reference encoder. Scanning it into Transfers opens that
+  delivery's count screen.
+- **Expected arrival dates** on transfers. A delivery becomes overdue the day after its date;
+  deliveries without one still use the Settings threshold.
 
 ## v1.6.0 — what changed from v1.5.0
 

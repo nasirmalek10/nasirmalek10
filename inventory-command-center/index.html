@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Offline inventory and point-of-sale software with per-location stock, partial stock transfers with printable delivery receipts, offline store-to-warehouse transfer files with signed files, email sharing, stock requests, blind and over-delivery receiving, and receiving confirmations, PIN sign-in with granular checkbox permissions, role presets, manager PIN approval, and temporary access, universal ISO currency support, location-aware offline tax profiles, barcode checkout, receipts, returns, purchasing, import, export, and backup.">
+  <meta name="description" content="Offline inventory and point-of-sale software with per-location stock, partial stock transfers with printable delivery receipts, offline store-to-warehouse transfer files with signed files, email sharing, stock requests, blind and over-delivery receiving, and receiving confirmations, PIN sign-in with granular checkbox permissions, role presets, manager PIN approval, per-user discount and dispatch limits, temporary access, access packages shared between installations, per-location min/max replenishment, outbox ZIP bundles, printed delivery barcodes, universal ISO currency support, location-aware offline tax profiles, barcode checkout, receipts, returns, purchasing, import, export, and backup.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop stop-color=%27%2311b9ae%27/%3E%3Cstop offset=%27.5%27 stop-color=%27%233977f6%27/%3E%3Cstop offset=%271%27 stop-color=%27%238b5cf6%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2764%27 height=%2764%27 rx=%2718%27 fill=%27url(%23g)%27/%3E%3Cpath d=%27M17 18h30v28H17z%27 fill=%27none%27 stroke=%27white%27 stroke-width=%274%27/%3E%3Cpath d=%27M17 28h30M27 18v28%27 stroke=%27white%27 stroke-width=%274%27/%3E%3C/svg%3E">
-  <title>Inventory Command Center + Offline POS — Multi-Site Transfers & Permissions v1.6.0</title>
+  <title>Inventory Command Center + Offline POS — Multi-Site Transfers & Permissions v1.7.0</title>
   <style>
 :root {
   --bg: #f4f7fb;
@@ -611,7 +611,10 @@ table thead th {
 }
 
 
-/* v1.6.0 — finer permissions with manager PIN approval and temporary access, signed and emailable
+/* v1.7.0 — per-location min/max and a replenishment planner, per-user discount and dispatch limits,
+   access packages between installations, outbox ZIP bundles, delivery-note barcodes and scanning,
+   expected arrival dates.
+   v1.6.0 — finer permissions with manager PIN approval and temporary access, signed and emailable
    transfer files, stock requests, blind and over-delivery receiving, overdue alerts, pick lists.
    POS v1.5.0 — granular checkbox permissions with role presets and per-user location scope,
    offline store ⇄ warehouse transfer files with receiving confirmations, per-location stock ledger,
@@ -809,6 +812,12 @@ tr.flash td { background:var(--green-soft); transition:background .2s ease; }
 .copy-perms { max-width:520px; margin-bottom:10px; }
 .field span small { font-weight:600; color:var(--muted); text-transform:none; letter-spacing:0; }
 @media print { .approval-layer { display:none !important; } }
+/* ---- v1.7: barcodes, lookup, levels ------------------------------------------------------- */
+.dn-number svg.barcode { display:block; margin:0 0 6px auto; height:auto; max-height:46px; }
+.dn-number svg.barcode { max-width:100%; }
+.lookup-bar { justify-content:flex-start; margin:0 0 16px; }
+.lookup-bar .field { flex:1 1 320px; }
+@media (max-width:760px){ .dn-number svg.barcode { margin-left:0; } }
   </style>
 </head>
 <body>
@@ -1375,6 +1384,19 @@ const hmacSha256Hex=(key,message)=>{
  const outer=new Uint8Array(96);outer.set(pad(0x5c));outer.set(sha256Bytes(inner),64);
  return toHex(sha256Bytes(outer));
 };
+/* v1.7 Code 128 (set B) barcodes for delivery notes, pick lists, and request slips, drawn as
+   inline SVG so they print from an offline page. Patterns are the ISO/IEC 15417 module table. */
+const CODE128_PATTERNS='11011001100 11001101100 11001100110 10010011000 10010001100 10001001100 10011001000 10011000100 10001100100 11001001000 11001000100 11000100100 10110011100 10011011100 10011001110 10111001100 10011101100 10011100110 11001110010 11001011100 11001001110 11011100100 11001110100 11101101110 11101001100 11100101100 11100100110 11101100100 11100110100 11100110010 11011011000 11011000110 11000110110 10100011000 10001011000 10001000110 10110001000 10001101000 10001100010 11010001000 11000101000 11000100010 10110111000 10110001110 10001101110 10111011000 10111000110 10001110110 11101110110 11010001110 11000101110 11011101000 11011100010 11011101110 11101011000 11101000110 11100010110 11101101000 11101100010 11100011010 11101111010 11001000010 11110001010 10100110000 10100001100 10010110000 10010000110 10000101100 10000100110 10110010000 10110000100 10011010000 10011000010 10000110100 10000110010 11000010010 11001010000 11110111010 11000010100 10001111010 10100111100 10010111100 10010011110 10111100100 10011110100 10011110010 11110100100 11110010100 11110010010 11011011110 11011110110 11110110110 10101111000 10100011110 10001011110 10111101000 10111100010 11110101000 11110100010 10111011110 10111101110 11101011110 11110101110 11010000100 11010010000 11010011100'.split(' ');
+const code128Modules=text=>{
+ const vals=[104];for(const ch of String(text??''))vals.push(Math.min(95,Math.max(0,ch.charCodeAt(0)-32)));
+ let sum=104;for(let i=1;i<vals.length;i++)sum+=vals[i]*i;vals.push(sum%103);
+ return vals.map(v=>CODE128_PATTERNS[v]).join('')+'1100011101011';
+};
+const code128Svg=(text,{height=46,module=2}={})=>{
+ const bits=code128Modules(text),quiet=10,w=(bits.length+quiet*2)*module;let bars='';
+ for(let i=0;i<bits.length;){if(bits[i]==='1'){let j=i;while(bits[j]==='1')j++;bars+=`<rect x="${(i+quiet)*module}" y="0" width="${(j-i)*module}" height="${height}"/>`;i=j;}else i++;}
+ return `<svg class="barcode" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${height}" width="${w}" height="${height}" role="img" aria-label="Barcode ${esc(text)}"><rect width="${w}" height="${height}" fill="#fff"/><g fill="#000">${bars}</g></svg>`;
+};
 /* Constant-time comparison so a forged signature cannot be found byte by byte. */
 const safeEqual=(a,b)=>{a=String(a||'');b=String(b||'');let d=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)d|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return d===0;};
 /* v1.3.7 Unicode-safe normalization: NFKC reconciles compatibility/full-width forms,
@@ -1642,7 +1664,13 @@ const TRANSFER_FILE_KINDS = ['shipment','receipt','request'];
 const RETURN_REASONS = ['Overstock','Damaged','Expired','Recall','Customer return','Wrong item','Seasonal','Other'];
 const REQUEST_STATUSES = ['Draft','Sent','Partially Fulfilled','Fulfilled','Cancelled'];
 const SECRET_SETTINGS = ['transferExchangeKey'];
+const ACCESS_PACKAGE_FORMAT = 'InventoryCommandCenterAccessPackage';
 const APPROVAL_WINDOW_MS = 180000;
+/* v1.7 per-user limits, set in the user editor next to the permission they qualify. */
+const USER_LIMITS = {
+ discount:{permission:'pos.discount',field:'maxDiscountPercent',label:'discount limit',max:100,format:v=>v===Infinity?'no limit':`${Math.round(v*10)/10}%`},
+ dispatch:{permission:'transfers.dispatch',field:'maxDispatchValue',label:'dispatch value limit',max:1e12,format:(v,c)=>v===Infinity?'no limit':money(v,c)}
+};
 function seedStockLedger(state){
  const known=new Set((state.products||[]).map(p=>p.id));
  const rows=(state.stock||[]).filter(r=>r&&known.has(r.productId));
@@ -1673,7 +1701,7 @@ function blankState(){
    /* v1.6 */permissionCatalogVersion:PERMISSION_CATALOG_VERSION,permissionUpgradeNote:'',managerApproval:true,transferExchangeKey:'',requireSignedTransfers:false,blindReceiving:false,transitAlertDays:3,requestHighWater:0},
   products:[],suppliers:[],locations:[],movements:[],sales:[],purchaseOrders:[],counts:[],
   posTransactions:[],cashSessions:[],cashMovements:[],posReturns:[],
-  stock:[],transfers:[],users:[],roles:[],transferFileLog:[],auditLog:[],stockRequests:[],
+  stock:[],transfers:[],users:[],roles:[],transferFileLog:[],auditLog:[],stockRequests:[],parLevels:[],
   importHistory:[],mappingProfiles:[],advisoryHistory:[],backups:[],
   ui:{section:'dashboard',productSearch:'',stockFilter:'All',globalSearch:'',productPage:1,inventoryPage:1,reorderPages:{},tablePageSize:100,selectedProducts:[],activeImport:null,lastSaved:null,posCart:[],posSearch:'',posLocationId:'',posOrderDiscount:0,currentUserId:'',transferPage:1,transferFilter:'All',transferFilterUXVersion:2,locationStockId:''}
  };
@@ -1715,7 +1743,9 @@ class InventoryApp {
  }
  migrate(s,{clearSession=true}={}){
   const b=blankState(); const out={...b,...s,settings:{...b.settings,...(s.settings||{})},ui:{...b.ui,...(s.ui||{})}};
-  for(const k of ['products','suppliers','locations','movements','sales','purchaseOrders','counts','posTransactions','cashSessions','cashMovements','posReturns','stock','transfers','users','roles','transferFileLog','auditLog','stockRequests','importHistory','mappingProfiles','advisoryHistory','backups']) if(!Array.isArray(out[k]))out[k]=[];
+  for(const k of ['products','suppliers','locations','movements','sales','purchaseOrders','counts','posTransactions','cashSessions','cashMovements','posReturns','stock','transfers','users','roles','transferFileLog','auditLog','stockRequests','parLevels','importHistory','mappingProfiles','advisoryHistory','backups']) if(!Array.isArray(out[k]))out[k]=[];
+  {const productIds=new Set(out.products.map(p=>p.id)),locIds=new Set(out.locations.map(l=>l.id)),seenPar=new Set();
+   out.parLevels=out.parLevels.filter(r=>{if(!r||!productIds.has(r.productId)||!locIds.has(r.locationId))return false;const k=`${r.productId}|${r.locationId}`;if(seenPar.has(k))return false;seenPar.add(k);r.min=Math.max(0,Math.floor(num(r.min)));r.max=Math.max(r.min,Math.floor(num(r.max)));r.id=r.id||uid('par');return true;});}
   if(!Array.isArray(out.ui.posCart))out.ui.posCart=[];
   if(!out.ui.reorderPages||typeof out.ui.reorderPages!=='object'||Array.isArray(out.ui.reorderPages))out.ui.reorderPages={};
   /* v1.4.3 UX migration: v1.4.2 defaulted Transfers to Open, so a completed delivery vanished
@@ -1760,6 +1790,7 @@ class InventoryApp {
   }
   out.settings.permissionCatalogVersion=PERMISSION_CATALOG_VERSION;
   for(const u of out.users){
+   for(const def of Object.values(USER_LIMITS)){const v=u[def.field];if(u.role==='Admin'||v===''||v===null||v===undefined||!Number.isFinite(Number(v))||Number(v)<0)delete u[def.field];else u[def.field]=Number(v);}
    if(u.role==='Admin')delete u.accessExpiresOn;
    else if(u.accessExpiresOn&&!/^\d{4}-\d{2}-\d{2}$/.test(String(u.accessExpiresOn)))delete u.accessExpiresOn;
   }
@@ -1883,7 +1914,7 @@ class InventoryApp {
   try{return await this.withApproval(fn);}catch(err){if(err?.silent)return null;console.error(err);this.toast(err?.message||String(err),'error');return null;}
   finally{if(button?.isConnected){button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=original;}}
  }
- async atomicState(mutator,capability=''){
+ async atomicState(mutator,capability='',{keepElevation=false}={}){
   /* Defense in depth: every ordinary persisted workspace mutation funnels through this boundary.
      Each caller names the capability it is exercising; a caller that names none is Admin-only.
      UI capability checks remain in place, but a missed button/handler must still fail closed. */
@@ -1908,7 +1939,7 @@ class InventoryApp {
    this.assertStockLedgerIntegrity('Workspace');
    await this.save();
    /* A manager approval covers one saved change, never a session. */
-   this.clearElevation();
+   if(!keepElevation)this.clearElevation();
    return result;
   }
   catch(err){this.state=this.migrate(snapshot,{clearSession:false});throw err;}
@@ -2323,10 +2354,34 @@ class InventoryApp {
     that single action with their own PIN — a supervisor override at the till or receiving dock.
     Admin-only actions (restore, reset) are never offered. Every approval and every refused PIN
     is written to the audit log, and the elevation is consumed by the first saved change. */
- approvalCandidates(key){
+ approvalCandidates(key,limit=null){
   if(!this.securityEnabled()||!this.state.settings.managerApproval||!key||!PERMISSION_KEYS.includes(key))return [];
   const me=this.currentUser();if(!me)return [];
-  return this.activeUsers().filter(u=>u.id!==me.id&&!this.accessExpired(u)&&(u.role==='Admin'||this.userPermissions(u).includes(key)));
+  return this.activeUsers().filter(u=>u.id!==me.id&&!this.accessExpired(u)&&(u.role==='Admin'||this.userPermissions(u).includes(key))&&(!limit||this.userLimit(u,limit.kind)>=limit.value-1e-9));
+ }
+ assertDiscountAllowed(totals){
+  const pct=totals.merchandise>0?totals.discount/totals.merchandise*100:0,label=`Giving a ${money(totals.discount,this.state.settings.currency)} (${Math.round(pct*10)/10}%) discount`,limit={kind:'discount',value:pct};
+  /* Someone without the permission at all gets one approval that also covers the amount. */
+  try{this.assertCan('discount',label);}catch(e){if(e.permission)e.limit=limit;throw e;}
+  return this.assertWithinLimit('discount',pct,label);
+ }
+ /* ---- Per-user limits (v1.7) ------------------------------------------------------------- */
+ /* A permission says what someone may do; a limit says how much. Blank means no limit, Admin is
+    never limited, and going over a limit is approvable by a colleague whose own limit covers it. */
+ userLimit(user,kind){
+  const def=USER_LIMITS[kind];if(!def||!user||user.role==='Admin')return Infinity;
+  const v=user[def.field];return v===null||v===undefined||v===''||!Number.isFinite(Number(v))?Infinity:Number(v);
+ }
+ limitLabel(kind,value){const def=USER_LIMITS[kind];return def?def.format(value,this.state.settings.currency):String(value);}
+ assertWithinLimit(kind,value,label){
+  if(!this.securityEnabled())return true;
+  const user=this.currentUser(),def=USER_LIMITS[kind];if(!user||!def)return true;
+  if(value<=this.userLimit(user,kind)+1e-9)return true;
+  const el=this.elevation;
+  if(el&&el.userId===user.id&&Date.now()<el.expires&&num(el.limits?.[kind])>=value-1e-9)return true;
+  const err=new Error(`${label} is over ${user.name}'s ${def.label} of ${this.limitLabel(kind,this.userLimit(user,kind))}${this.state.settings.managerApproval?'. A colleague whose limit covers it can approve it with their PIN':'. Ask an Admin to raise the limit in Users and Roles'}.`);
+  err.permission=def.permission;err.limit={kind,value};err.actionLabel=label;
+  throw err;
  }
  canOrApprove(capability){return this.can(capability)||this.approvalCandidates(this.permissionKeyFor(capability)).length>0;}
  approvalStamp(){const el=this.elevation;return el&&Date.now()<el.expires?el.approverName:'';}
@@ -2336,21 +2391,21 @@ class InventoryApp {
    try{return await fn();}
    catch(err){
     const key=err?.permission;
-    if(!key||attempt>=4||!this.approvalCandidates(key).length)throw err;
-    const granted=await this.requestApproval(key,err.actionLabel||'');
+    if(!key||attempt>=4||!this.approvalCandidates(key,err.limit||null).length)throw err;
+    const granted=await this.requestApproval(key,err.actionLabel||'',err.limit||null);
     if(!granted){const quiet=new Error('Approval cancelled.');quiet.silent=true;throw quiet;}
    }
   }
  }
- requestApproval(key,actionLabel=''){
-  const me=this.currentUser(),candidates=this.approvalCandidates(key);
+ requestApproval(key,actionLabel='',limit=null){
+  const me=this.currentUser(),candidates=this.approvalCandidates(key,limit);
   if(!me||!candidates.length)return Promise.resolve(false);
   $('#approvalLayer')?.remove();
   const layer=document.createElement('div');layer.id='approvalLayer';layer.className='approval-layer';
   layer.innerHTML=`<form class="approval-card" role="dialog" aria-modal="true" aria-labelledby="approvalTitle" id="approvalForm">
    <p class="eyebrow">Manager approval</p><h2 id="approvalTitle">Approval needed</h2>
-   <p>${esc(actionLabel||'This action')} needs the <strong>${esc(this.permissionLabel(key))}</strong> permission, which ${esc(me.name)} does not have. A colleague who holds it can approve this one action with their own PIN.</p>
-   <label class="field"><span>Approved by</span><select name="approver" id="approvalUser">${candidates.map(u=>`<option value="${u.id}">${esc(u.name)} · ${esc(u.role)}</option>`).join('')}</select></label>
+   <p>${limit&&this.can(this.permissionKeyFor(key))?`${esc(actionLabel||'This action')} is over ${esc(me.name)}'s ${esc(USER_LIMITS[limit.kind].label)} (${esc(this.limitLabel(limit.kind,this.userLimit(me,limit.kind)))}). A colleague whose limit covers <strong>${esc(this.limitLabel(limit.kind,limit.value))}</strong> can approve it with their own PIN.`:`${esc(actionLabel||'This action')} needs the <strong>${esc(this.permissionLabel(key))}</strong> permission, which ${esc(me.name)} does not have. A colleague who holds it can approve this one action with their own PIN.`}</p>
+   <label class="field"><span>Approved by</span><select name="approver" id="approvalUser">${candidates.map(u=>`<option value="${u.id}">${esc(u.name)} · ${esc(u.role)}${limit&&this.userLimit(u,limit.kind)!==Infinity?` · limit ${esc(this.limitLabel(limit.kind,this.userLimit(u,limit.kind)))}`:''}</option>`).join('')}</select></label>
    <label class="field"><span>Their PIN</span><input name="pin" id="approvalPin" type="password" inputmode="numeric" autocomplete="off"></label>
    <label class="field"><span>Reason (optional, kept in the audit log)</span><input name="reason" id="approvalReason" autocomplete="off"></label>
    <div id="approvalError"></div>
@@ -2371,7 +2426,7 @@ class InventoryApp {
    $('#approvalForm',layer).addEventListener('submit',e=>{
     e.preventDefault();
     try{
-     const approver=this.approvalCandidates(key).find(u=>u.id===$('#approvalUser',layer).value);
+     const approver=this.approvalCandidates(key,limit).find(u=>u.id===$('#approvalUser',layer).value);
      if(!approver)throw new Error('Choose who is approving.');
      const pin=$('#approvalPin',layer).value,reason=String($('#approvalReason',layer).value||'').trim();
      const waiting=this.pinLockRemaining(approver.id);
@@ -2385,8 +2440,9 @@ class InventoryApp {
      if(approver.pin)this.setUserPin(approver,pin);
      const keys=new Set(this.elevation?.userId===me.id?this.elevation.keys:[]);
      for(const k of normalizePermissions([key]))keys.add(k);
-     this.elevation={userId:me.id,keys:[...keys],approverId:approver.id,approverName:approver.name,reason,expires:Date.now()+APPROVAL_WINDOW_MS};
-     this.audit('Manager approval',`${approver.name} approved ${me.name}: ${this.permissionLabel(key)}${actionLabel?` — ${actionLabel}`:''}${reason?` (${reason})`:''}`,{approverId:approver.id,permission:key});
+     const limits={...(this.elevation?.userId===me.id?this.elevation.limits:{})};if(limit)limits[limit.kind]=Math.max(num(limits[limit.kind]),limit.value);
+     this.elevation={userId:me.id,keys:[...keys],limits,approverId:approver.id,approverName:approver.name,reason,expires:Date.now()+APPROVAL_WINDOW_MS};
+     this.audit('Manager approval',`${approver.name} approved ${me.name}: ${this.permissionLabel(key)}${limit?` up to ${this.limitLabel(limit.kind,limit.value)}`:''}${actionLabel?` — ${actionLabel}`:''}${reason?` (${reason})`:''}`,{approverId:approver.id,permission:key});
      this.scheduleSave();
      this.toast(`${approver.name} approved: ${this.permissionLabel(key)}.`);
      finish(true);
@@ -2526,7 +2582,13 @@ class InventoryApp {
  /* v1.6 overdue deliveries: in transit longer than Settings allow. For an imported delivery the
     clock starts at the sender's dispatch time (or the import, if the file had none). */
  transferDaysInTransit(t,now=Date.now()){const since=Date.parse(t?.dispatchedAt||t?.importedAt||'');return Number.isFinite(since)?Math.floor((now-since)/86400000):0;}
- transferOverdue(t,now=Date.now()){const limit=num(this.state.settings.transitAlertDays);return Boolean(limit>0&&t?.status==='In Transit'&&this.transferDaysInTransit(t,now)>=limit);}
+ /* v1.7: a delivery with an expected arrival date is overdue the day after it; otherwise the
+    Settings threshold applies. */
+ transferOverdue(t,now=Date.now()){
+  if(t?.status!=='In Transit')return false;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(String(t.expectedArrival||'')))return day(new Date(now))>t.expectedArrival;
+  const limit=num(this.state.settings.transitAlertDays);return Boolean(limit>0&&this.transferDaysInTransit(t,now)>=limit);
+ }
  /* An inbound transfer was imported from another installation's file: its origin usually does
     not exist in this workspace, so the name comes from the file. */
  transferFromName(t){return t?.fromLocationId?this.locationName(t.fromLocationId):(t?.externalFrom?.name||'Other site');}
@@ -2586,6 +2648,8 @@ class InventoryApp {
   if(t.status!=='Draft')throw new Error(`Only a draft can be dispatched. ${t.number} is already ${t.status}.`);
   this.assertLocationAllowed(t.fromLocationId,'The dispatching location');
   const errors=this.validateTransferDraft(t);if(errors.length)throw new Error(errors.join(' '));
+  this.assertWithinLimit('dispatch',this.transferValue(t),`Dispatching ${t.number} (${money(this.transferValue(t),this.state.settings.currency)})`);
+  const approvedBy=this.approvalStamp();
   const actor=this.currentUser();
   await this.atomicState(()=>{
    for(const l of this.transferLines(t)){
@@ -2597,7 +2661,7 @@ class InventoryApp {
     this.pruneStockRows(p.id);this.syncProductQuantity(p);p.updatedAt=iso();
     this.recordTransferMovement(p,'Transfer Out',num(l.qty),t.fromLocationId,t.toLocationId,t);
    }
-   t.status='In Transit';t.dispatchedAt=iso();
+   t.status='In Transit';t.dispatchedAt=iso();if(approvedBy)t.dispatchApprovedBy=approvedBy;
    if(detail.releasedBy!==undefined)t.releasedBy=detail.releasedBy||actor?.name||'';
    if(detail.carrier!==undefined)t.carrier=detail.carrier;
    if(detail.vehicle!==undefined)t.vehicle=detail.vehicle;
@@ -2799,7 +2863,7 @@ class InventoryApp {
    if(t.status==='Draft'||!t.dispatchedAt)throw new Error(`Dispatch ${t.number} before downloading its transfer file. A draft has not moved any stock yet.`);
    if(t.status==='Cancelled')throw new Error(`${t.number} was cancelled. Do not send its transfer file.`);
    base.transfer={globalId:t.globalId,number:t.number,type:t.type||'Replenishment',date:t.date||'',from:this.locationDescriptor(t.fromLocationId),to:this.locationDescriptor(t.toLocationId),
-    preparedBy:t.preparedBy||'',releasedBy:t.releasedBy||'',carrier:t.carrier||'',vehicle:t.vehicle||'',notes:t.notes||'',dispatchedAt:t.dispatchedAt||'',currency:s.currency,
+    preparedBy:t.preparedBy||'',releasedBy:t.releasedBy||'',carrier:t.carrier||'',vehicle:t.vehicle||'',notes:t.notes||'',dispatchedAt:t.dispatchedAt||'',currency:s.currency,...(t.expectedArrival?{expectedArrival:t.expectedArrival}:{}),
     lines:this.transferLines(t).map(l=>{const p=this.productById(l.productId)||{};return {lineId:l.id,sku:String(l.sku||p.sku||''),barcode:String(p.barcode||''),productName:String(l.productName||p.productName||''),category:String(p.category||''),brand:String(p.brand||''),unit:String(p.unit||''),qty:num(l.qty),unitCost:num(l.unitCost),price:num(p.price),taxRate:num(p.taxRate),casePack:num(p.casePack)||1,...(l.returnReason?{returnReason:l.returnReason}:{})};}),...(t.requestGlobalId?{requestGlobalId:t.requestGlobalId,requestNumber:t.requestNumber||''}:{})};
   }else if(kind==='receipt'){
    if(t.direction!=='inbound')throw new Error(`${t.number} was created here. A receiving confirmation is only sent back for a delivery imported from another site's file.`);
@@ -2935,7 +2999,7 @@ class InventoryApp {
   this.assertCan('transfers.import','Importing delivery files');
   let input=$('#transferFileInput');
   if(!input){
-   input=document.createElement('input');input.type='file';input.id='transferFileInput';input.hidden=true;input.multiple=true;input.accept='.json,application/json';
+   input=document.createElement('input');input.type='file';input.id='transferFileInput';input.hidden=true;input.multiple=true;input.accept='.json,.zip,application/json,application/zip';
    input.addEventListener('change',e=>{const files=[...e.target.files];e.target.value='';if(files.length)this.importTransferFiles(files).catch(err=>this.toast(err.message||String(err),'error'));});
    document.body.appendChild(input);
   }
@@ -2943,9 +3007,28 @@ class InventoryApp {
  }
  /* Entry point for one or more files (picker, drag-and-drop, or the Import Center). Receiving
     confirmations are applied straight away; each shipment opens a review first. */
+ /* v1.7: a ZIP from another site's Outbox is unpacked here and each file inside goes through the
+    same checks as a file imported on its own — so duplicate protection still applies per file. */
+ async expandTransferZips(files){
+  const out=[];
+  for(const f of files){
+   if(!/\.zip$/i.test(f.name||'')&&f.type!=='application/zip'){out.push(f);continue;}
+   if(f.size>50*1024*1024)throw new Error(`${f.name} is larger than 50 MB and is not an outbox bundle.`);
+   const zip=await JSZip.loadAsync(await f.arrayBuffer());
+   const entries=Object.values(zip.files).filter(e=>!e.dir&&/\.json$/i.test(e.name));
+   if(entries.length>500)throw new Error(`${f.name} holds ${entries.length} files; an outbox bundle holds at most 500.`);
+   if(!entries.length)throw new Error(`${f.name} contains no transfer files.`);
+   for(const e of entries){const text=await e.async('string');out.push({name:`${f.name} › ${e.name.split('/').pop()}`,size:text.length,text:async()=>text});}
+  }
+  return out;
+ }
  async importTransferFiles(files){
   this.assertCan('transfers.import','Importing delivery files');
   const shipments=[],messages=[];
+  try{files=await this.expandTransferZips(files);}catch(err){this.toast(err.message,'error');return [{ok:false,text:err.message}];}
+  /* Requests first, then shipments, then confirmations, so a bundle applies in a sensible order. */
+  const order=n=>/_REQUEST\./i.test(n)?0:/_RECEIVED\./i.test(n)?2:1;
+  files=[...files].sort((a,b)=>order(a.name)-order(b.name));
   for(const f of files){
    try{
     if(f.size>10*1024*1024)throw new Error(`${f.name} is larger than 10 MB and is not a transfer file.`);
@@ -2955,10 +3038,83 @@ class InventoryApp {
     else shipments.push({file,name:f.name});
    }catch(err){messages.push({ok:false,text:err.message});}
   }
-  for(const m of messages)this.toast(m.text,m.ok?'success':'error');
+  if(messages.length>3){
+   const ok=messages.filter(m=>m.ok).length;
+   this.toast(`${fmt(messages.length)} file(s) processed: ${fmt(ok)} applied, ${fmt(messages.length-ok)} refused.${shipments.length?` ${fmt(shipments.length)} delivery file(s) are waiting for your review.`:''}`,ok===messages.length?'success':'warning');
+   this.lastImportResults=messages;
+  }else for(const m of messages)this.toast(m.text,m.ok?'success':'error');
   if(this.state.ui.section==='transfers')this.navigate('transfers',false);
+  if(messages.length>3&&!shipments.length)this.showImportResults();
   if(shipments.length){this.transferImportQueue=shipments;this.openShipmentReview();}
   return messages;
+ }
+ showImportResults(){
+  const rows=this.lastImportResults||[];
+  this.modal('Import results',`<div class="table-wrap"><table><thead><tr><th>Result</th><th>Detail</th></tr></thead><tbody>${rows.map(m=>`<tr><td><span class="badge ${m.ok?'healthy':'danger'}">${m.ok?'Applied':'Refused'}</span></td><td>${esc(m.text)}</td></tr>`).join('')}</tbody></table></div>`,'<button class="button primary" data-modal-close>Close</button>','Transfers');
+  $('[data-modal-close]').onclick=()=>this.closeModal();
+ }
+ /* ---- Outbox (v1.7) -------------------------------------------------------------------------- */
+ /* Every file this installation still owes another site: shipments dispatched but never sent,
+    receiving confirmations due, and stock requests never sent. Grouped per destination so one
+    ZIP (one email, one USB stick) carries everything for that site. */
+ outboxItems(){
+  const items=[],siteOf=(id,ext)=>{const l=id?this.locationById(id):null;const d=l?{code:l.code||'',name:l.name,email:l.email||''}:{code:ext?.code||'',name:ext?.name||'Other site',email:ext?.email||''};return {...d,key:normalizeLocationCode(d.code)||slug(d.name)};};
+  const canShip=this.can('transfers.dispatch')||this.can('transfers.create');
+  for(const t of this.state.transfers){
+   if(canShip&&t.direction!=='inbound'&&t.status==='In Transit'&&!this.transferFileSent(t,'shipment')&&this.locationAllowed(t.fromLocationId))items.push({kind:'shipment',id:t.id,number:t.number,site:siteOf(t.toLocationId,null)});
+   if(this.can('transfers.receive')&&this.transferConfirmationDue(t)&&this.locationAllowed(t.toLocationId))items.push({kind:'receipt',id:t.id,number:t.number,site:siteOf(t.fromLocationId,t.externalFrom)});
+  }
+  if(this.can('transfers.request'))for(const r of this.state.stockRequests)if(r.direction!=='inbound'&&this.requestIsOpen(r)&&!(r.fileEvents||[]).some(e=>e.type==='exported')&&this.locationAllowed(r.toLocationId))items.push({kind:'request',id:r.id,number:r.number,site:siteOf(r.fromLocationId,null)});
+  return items;
+ }
+ outboxSites(){
+  const map=new Map();
+  for(const it of this.outboxItems()){const g=map.get(it.site.key)||{...it.site,items:[]};g.items.push(it);map.set(it.site.key,g);}
+  return [...map.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ }
+ async buildOutboxZip(siteKey){
+  const site=this.outboxSites().find(x=>x.key===siteKey);if(!site)throw new Error('Nothing is waiting to be sent to that site.');
+  const zip=new JSZip(),built=[];
+  for(const it of site.items){
+   let file,name;
+   if(it.kind==='request'){const r=this.requestById(it.id);file=this.buildRequestFile(r);name=`${String(r.number).replace(/[^A-Za-z0-9-]+/g,'-')}_REQUEST.transfer.json`;}
+   else{const t=this.transferById(it.id);file=this.buildTransferFile(t,it.kind);name=this.transferFileName(file);}
+   zip.file(name,JSON.stringify(file,null,2));built.push({it,file,name});
+  }
+  const station=this.stationLocation();
+  zip.file('README.txt',`Transfer files from ${this.state.settings.businessName||''}${station?` (${station.name}${station.code?` · ${station.code}`:''})`:''} for ${site.name}${site.code?` (${site.code})`:''}, ${new Date().toLocaleString()}.\r\n\r\nImport this whole ZIP in Inventory Command Center under Transfers → Import delivery file. Each file inside is checked and can only be applied once.\r\n\r\n${built.map(b=>`${b.name} — ${this.fileKindLabel(b.file.kind)} ${b.file.transfer.number} · code ${this.transferFileCode(b.file)}`).join('\r\n')}\r\n`);
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+  const zipName=`outbox_${(station?.code||'site').replace(/[^A-Za-z0-9-]+/g,'-')}-to-${(site.code||slug(site.name)||'site').replace(/[^A-Za-z0-9-]+/g,'-')}_${day()}.zip`;
+  return {site,built,blob,zipName};
+ }
+ async sendOutbox(siteKey,via='download'){
+  const {site,built,blob,zipName}=await this.buildOutboxZip(siteKey);
+  let result='Downloaded';
+  if(via==='email'){
+   const body=`Transfer files for ${site.name}: ${built.map(b=>`${this.fileKindLabel(b.file.kind)} ${b.file.transfer.number}`).join(', ')}.\n\nImport the attached ZIP (${zipName}) under Transfers → Import delivery file.\n\n${this.state.settings.businessName||''}`;
+   const shareable=typeof File==='function'&&typeof navigator.canShare==='function'&&!this.disableShareSheet?new File([blob],zipName,{type:'application/zip'}):null;
+   let shared=false;
+   if(shareable){let ok=false;try{ok=navigator.canShare({files:[shareable]});}catch{ok=false;}if(ok){try{await navigator.share({files:[shareable],title:`Transfer files for ${site.name}`,text:body});shared=true;}catch(err){if(err?.name==='AbortError')throw new Error('Sharing was cancelled. Nothing was sent or recorded.');}}}
+   if(shared)result='Shared';else{downloadBlob(blob,zipName);this.openMailDraft({to:site.email||'',subject:`Transfer files for ${site.name} (${built.length})`,body});result='Emailed';}
+  }else downloadBlob(blob,zipName);
+  await this.atomicState(()=>{
+   for(const b of built){
+    const target=b.it.kind==='request'?this.requestById(b.it.id):this.transferById(b.it.id);
+    target.fileEvents=target.fileEvents||[];target.fileEvents.push({type:'exported',kind:b.it.kind,fileId:b.file.fileId,at:b.file.createdAt,by:b.file.createdBy,via:result,bundle:zipName});
+    this.logTransferFile({fileId:b.file.fileId,kind:b.it.kind,direction:'out',globalId:b.file.transfer.globalId,number:b.file.transfer.number,...(b.it.kind==='request'?{requestId:b.it.id}:{transferId:b.it.id}),result,detail:`${b.name} in ${zipName} · code ${this.transferFileCode(b.file)}`});
+   }
+   this.audit(`Outbox ${result.toLowerCase()}`,`${zipName}: ${fmt(built.length)} file(s) for ${site.name}`);
+  },built.some(b=>b.it.kind==='shipment')?(this.can('transfers.dispatch')?'transfers.dispatch':'transfers.create'):built.some(b=>b.it.kind==='receipt')?'transfers.receive':'transfers.request');
+  this.toast(result==='Downloaded'?`${zipName} downloaded with ${fmt(built.length)} file(s) for ${site.name}.`:result==='Shared'?`${zipName} handed to your share sheet.`:`${zipName} downloaded and an email to ${site.name} was opened. Attach the ZIP, then send.`);
+  return {zipName,count:built.length,result};
+ }
+ showOutbox(){
+  this.assertCan('transfers.view','Opening the outbox');
+  const sites=this.outboxSites();
+  this.modal('Outbox',sites.length?`<p style="margin:0 0 12px;color:var(--muted)">Files this installation still owes other sites, bundled one ZIP per site. The other site imports the whole ZIP at once.</p><div class="table-wrap"><table><thead><tr><th>Site</th><th>Files waiting</th><th></th></tr></thead><tbody>${sites.map(g=>`<tr><td><strong>${esc(g.name)}</strong>${g.code?` <span class="badge info">${esc(g.code)}</span>`:''}<small class="cell-sub">${esc(g.email||'no email on file')}</small></td><td>${g.items.map(i=>`${esc(this.fileKindLabel(i.kind))} ${esc(i.number)}`).join('<br>')}</td><td class="row-actions"><button class="button ghost small" data-outbox-download="${esc(g.key)}">Download ZIP</button><button class="button primary small" data-outbox-email="${esc(g.key)}">✉ Email ZIP</button></td></tr>`).join('')}</tbody></table></div>`:'<p>Nothing is waiting to be sent. Dispatched shipments, due confirmations, and new stock requests appear here until their file has been sent.</p>','<button class="button ghost" data-modal-close>Close</button>','Transfers');
+  $('[data-modal-close]').onclick=()=>this.closeModal();
+  for(const b of $$('[data-outbox-download]'))b.onclick=()=>this.runAction(b,async()=>{await this.sendOutbox(b.dataset.outboxDownload,'download');this.showOutbox();});
+  for(const b of $$('[data-outbox-email]'))b.onclick=()=>this.runAction(b,async()=>{await this.sendOutbox(b.dataset.outboxEmail,'email');this.showOutbox();});
  }
  findLocationForDescriptor(d){
   if(!d)return null;
@@ -3044,6 +3200,7 @@ class InventoryApp {
    created={id:uid('trf'),globalId:t.globalId,number:this.uniqueTransferNumber(t.number),remoteNumber:t.number,direction:'inbound',type:TRANSFER_TYPES.includes(t.type)?t.type:'Replenishment',status:'In Transit',
     createdAt:now,date:t.date||day(),fromLocationId,externalFrom:t.from||null,toLocationId:plan.toLocationId,lines,
     preparedBy:t.preparedBy||'',releasedBy:t.releasedBy||'',receivedBy:'',carrier:t.carrier||'',vehicle:t.vehicle||'',notes:t.notes||'',dispatchedAt:t.dispatchedAt||'',receivedAt:'',
+    expectedArrival:/^\d{4}-\d{2}-\d{2}$/.test(String(t.expectedArrival||''))?t.expectedArrival:'',
     userId:actor?.id||'',userName:actor?.name||'',sourceFileId:file.fileId,origin:file.origin||null,importedAt:now,importedBy:actor?.name||'',
     ...(t.requestGlobalId?{requestGlobalId:String(t.requestGlobalId),requestNumber:String(t.requestNumber||'')}:{}),
     fileEvents:[{type:'imported',kind:'shipment',fileId:file.fileId,at:now,by:actor?.name||''}]};
@@ -3207,7 +3364,8 @@ class InventoryApp {
  suggestRequestLines(toLocationId,fromLocationId){
   const out=[];
   for(const p of this.activeProducts()){
-   const here=this.qtyAt(p.id,toLocationId),reorder=num(p.reorderPoint),max=num(p.maxStock);
+   /* v1.7: this location's own min/max when set; the company-wide reorder point otherwise. */
+   const par=this.parLevel(p.id,toLocationId),here=this.qtyAt(p.id,toLocationId)+this.incomingTo(p.id,toLocationId),reorder=par?Math.max(num(par.min),0.0001):num(p.reorderPoint),max=par?num(par.max):num(p.maxStock);
    if(!(reorder>0)||here>reorder)continue;
    const available=fromLocationId?this.qtyAt(p.id,fromLocationId):Infinity;
    const want=Math.max(0,Math.max(max,reorder)-here);
@@ -3409,6 +3567,149 @@ class InventoryApp {
    ${list.length?`<div class="table-wrap"><table><thead><tr><th>Request</th><th>Date</th><th>Route</th><th>Units</th><th>Shipped</th><th>Status</th><th></th></tr></thead><tbody>${list.map(r=>{const f=this.requestFulfilment(r),st=this.requestStatus(r);return `<tr><td><strong>${esc(r.number)}</strong><small class="cell-sub">${r.direction==='inbound'?'Incoming file':'Created here'}</small></td><td>${esc(r.date||'')}${r.neededBy?`<small class="cell-sub">Needed by ${esc(r.neededBy)}</small>`:''}</td><td>${esc(this.requestFromName(r))} → ${esc(this.requestToName(r))}</td><td>${fmt(f.requested)}</td><td>${fmt(f.sent)}</td><td><span class="badge ${this.requestStatusClass(st)}">${esc(st)}</span></td><td class="row-actions"><button class="button ghost small" data-action="view-request" data-id="${r.id}">Open</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="panel-body"><p style="margin:0;color:var(--muted)">No stock requests yet. Use <strong>Request stock</strong> to ask the warehouse for a delivery.</p></div>'}</section>`;
  }
 
+
+ /* ---- Per-location stock levels and replenishment (v1.7) ------------------------------------ */
+ /* Product reorder points are company-wide. A store needs its own minimum and maximum: when what
+    it holds plus what is already on the way falls to its minimum, it is topped up to its maximum.
+    Levels live in state.parLevels as {productId, locationId, min, max}. */
+ parLevel(productId,locationId){return this.state.parLevels.find(r=>r.productId===productId&&r.locationId===locationId)||null;}
+ /* Units already heading to a location: in transit (outstanding) plus drafts not yet dispatched. */
+ incomingTo(productId,locationId){
+  let n=0;
+  for(const t of this.state.transfers){
+   if(t.toLocationId!==locationId||!['Draft','In Transit'].includes(t.status))continue;
+   for(const l of this.transferLines(t))if(l.productId===productId)n+=t.status==='Draft'?num(l.qty):this.transferLineOutstanding(l);
+  }
+  return n;
+ }
+ draftedFrom(productId,locationId){let n=0;for(const t of this.state.transfers)if(t.status==='Draft'&&t.fromLocationId===locationId)for(const l of this.transferLines(t))if(l.productId===productId)n+=num(l.qty);return n;}
+ /* Shares scarce stock between stores in proportion to what each needs, then hands the leftover
+    units to the largest unmet needs, so no store is starved because it sorts last. */
+ allocateReplenishment(needs,available){
+  const total=needs.reduce((a,x)=>a+x.need,0),out=needs.map(x=>({...x,qty:0}));
+  if(available<=0||!total)return out;
+  if(total<=available){for(const x of out)x.qty=x.need;return out;}
+  let left=available;
+  for(const x of out){x.qty=Math.floor(x.need*available/total);left-=x.qty;}
+  while(left>0){const next=out.filter(x=>x.qty<x.need).sort((a,b)=>(b.need-b.qty)-(a.need-a.qty)||String(a.locationId).localeCompare(String(b.locationId)))[0];if(!next)break;next.qty++;left--;}
+  return out;
+ }
+ replenishmentPlan(fromLocationId,toLocationIds){
+  const wanted=new Set(toLocationIds.filter(id=>id&&id!==fromLocationId)),byProduct=new Map();
+  for(const r of this.state.parLevels){
+   if(!wanted.has(r.locationId))continue;
+   const p=this.productById(r.productId);if(!p||!this.isOperational(p))continue;
+   const onHand=this.qtyAt(p.id,r.locationId),incoming=this.incomingTo(p.id,r.locationId),position=onHand+incoming,min=num(r.min),max=Math.max(num(r.max),min);
+   if(position>min)continue;
+   const pack=Math.max(1,Math.floor(num(p.casePack))||1),need=Math.ceil(Math.max(0,max-position)/pack)*pack;
+   if(need<=0)continue;
+   const list=byProduct.get(p.id)||[];list.push({productId:p.id,locationId:r.locationId,onHand,incoming,min,max,need});byProduct.set(p.id,list);
+  }
+  const lines=[];
+  for(const [productId,needs] of byProduct){
+   const available=Math.max(0,this.qtyAt(productId,fromLocationId)-this.draftedFrom(productId,fromLocationId));
+   for(const x of this.allocateReplenishment(needs,available))lines.push({...x,available});
+  }
+  return lines.sort((a,b)=>String(this.locationName(a.locationId)).localeCompare(String(this.locationName(b.locationId)))||String(this.productById(a.productId)?.productName).localeCompare(String(this.productById(b.productId)?.productName)));
+ }
+ async createReplenishmentDrafts(fromLocationId,plan){
+  this.assertCan('transfers.create','Creating replenishment transfers');
+  this.assertLocationAllowed(fromLocationId,'The supplying location');
+  const groups=new Map();for(const x of plan)if(x.qty>0){const g=groups.get(x.locationId)||[];g.push(x);groups.set(x.locationId,g);}
+  if(!groups.size)throw new Error('Nothing to send: every store is above its minimum, or the supplying location has no stock of what they need.');
+  const me=this.currentUser(),created=[];
+  await this.atomicState(()=>{
+   for(const [toLocationId,rows] of groups){
+    const id=uid('trf'),number=this.nextTransferNumber();
+    const t={id,globalId:`${this.workspaceId()}:${id}`,direction:'internal',type:this.suggestTransferType(fromLocationId,toLocationId),fileEvents:[],number,status:'Draft',createdAt:iso(),date:day(),fromLocationId,toLocationId,
+     lines:rows.map(x=>{const p=this.productById(x.productId);return {id:uid('trfline'),productId:p.id,sku:p.sku,productName:p.productName,qty:x.qty,requestedQty:x.need,receivedQty:0,varianceQty:0,damagedQty:0,unitCost:num(p.cost)};}),
+     preparedBy:me?.name||this.state.settings.cashierName||'',releasedBy:'',receivedBy:'',carrier:'',vehicle:'',notes:`Replenishment plan ${day()} — topping ${this.locationName(toLocationId)} up to its maximum levels`,dispatchedAt:'',receivedAt:'',userId:me?.id||'',userName:me?.name||'',replenishment:true};
+    this.state.transfers.unshift(t);this.commitTransferHighWater(number);created.push(t);
+   }
+   this.audit('Replenishment drafts created',`${fmt(created.length)} draft transfer(s) from ${this.locationName(fromLocationId)}: ${created.map(t=>`${t.number} → ${this.locationName(t.toLocationId)}`).join(', ')}`);
+  },'transfers.create');
+  return created;
+ }
+ openReplenishmentPlanner(fromLocationId='',toLocationIds=null){
+  this.assertCan('transfers.create','Planning replenishment');
+  const sources=this.scopedLocations();if(!sources.length)throw new Error('You are not assigned to any location.');
+  const from=fromLocationId&&sources.some(l=>l.id===fromLocationId)?fromLocationId:(sources.find(l=>l.id===this.state.settings.stationLocationId)||sources.find(l=>l.type==='Warehouse')||sources[0]).id;
+  const stores=this.state.locations.filter(l=>l.id!==from),withLevels=new Set(this.state.parLevels.map(r=>r.locationId));
+  const targets=toLocationIds||stores.filter(l=>withLevels.has(l.id)).map(l=>l.id);
+  const plan=this.replenishmentPlan(from,targets),sendable=plan.filter(x=>x.qty>0),short=plan.filter(x=>x.qty<x.need);
+  this.modal('Replenish stores',`<form id="replenishForm" onsubmit="return false"><div class="form-grid">
+   <label class="field"><span>Send from</span><select name="from">${this.locationOptionsHTML(from,sources)}</select></label>
+   <div class="field"><span>Top up</span><div class="perm-location-list">${stores.map(l=>`<label class="field checkbox" style="margin:0"><input type="checkbox" name="to" value="${l.id}" ${targets.includes(l.id)?'checked':''}><span>${esc(l.name)}${withLevels.has(l.id)?'':' <small class="cell-sub" style="display:inline">no levels</small>'}</span></label>`).join('')}</div></div></div>
+   ${!this.state.parLevels.length?`<div class="notice warning">No stock levels are set yet. Open <strong>Stock levels</strong> and give each store a minimum and maximum per product (the sales-based suggestion is a quick start).</div>`:''}
+   ${plan.length?`<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Store</th><th>Product</th><th>On hand</th><th>On the way</th><th>Min / max</th><th>Needs</th><th>Send</th></tr></thead><tbody>${plan.map(x=>{const p=this.productById(x.productId);return `<tr><td>${esc(this.locationName(x.locationId))}</td><td>${esc(p?.productName||'')}<small class="cell-sub">${esc(p?.sku||'')} · ${fmt(x.available)} available at source</small></td><td>${fmt(x.onHand)}</td><td>${fmt(x.incoming)}</td><td>${fmt(x.min)} / ${fmt(x.max)}</td><td>${fmt(x.need)}</td><td>${x.qty<x.need?`<span class="badge ${x.qty?'warning':'danger'}">${fmt(x.qty)}</span>`:`<strong>${fmt(x.qty)}</strong>`}</td></tr>`;}).join('')}</tbody></table></div>`:`<div class="notice success" style="margin-top:12px">${this.state.parLevels.length?'Every chosen store is above its minimum once stock already on the way is counted. Nothing to send.':'Nothing to plan yet.'}</div>`}
+   ${short.length?`<div class="notice warning" style="margin-top:10px">${fmt(short.length)} line(s) cannot be filled in full; the available stock was shared in proportion to each store's need.</div>`:''}
+   <div class="notice" style="margin-top:10px">Creating the plan makes one <strong>draft</strong> transfer per store. Nothing moves until each draft is dispatched, so you can still adjust quantities.</div></form>`,
+   `<button class="button ghost" data-modal-cancel>Close</button>${this.can('products.edit')?'<button class="button secondary" id="replenishLevels">Stock levels</button>':''}<button class="button primary" id="replenishCreate" ${sendable.length?'':'disabled'}>Create ${fmt(new Set(sendable.map(x=>x.locationId)).size)} draft transfer(s)</button>`,'Transfers');
+  $('[data-modal-cancel]').onclick=()=>this.closeModal();
+  const form=$('#replenishForm'),redo=()=>this.openReplenishmentPlanner(form.elements.from.value,$$('[name="to"]',form).filter(b=>b.checked).map(b=>b.value));
+  form.elements.from.onchange=redo;for(const b of $$('[name="to"]',form))b.onchange=redo;
+  const lv=$('#replenishLevels');if(lv)lv.onclick=()=>this.openStockLevels(targets[0]||stores[0]?.id||'');
+  const go=$('#replenishCreate');go.onclick=()=>this.runAction(go,async()=>{const made=await this.createReplenishmentDrafts(from,plan);this.closeModal();this.toast(`${fmt(made.length)} draft transfer(s) created: ${made.map(t=>t.number).join(', ')}. Review and dispatch them from Transfers.`);this.state.ui.transferFilter='Draft';this.navigate('transfers');});
+ }
+ /* Suggests levels from what the location actually sold: minimum covers `minDays` of average
+    daily sales over the last `window` days, maximum covers `maxDays`. */
+ suggestParLevels(locationId,{window=30,minDays=7,maxDays=14}={}){
+  const since=day(new Date(Date.now()-window*86400000)),sold=new Map();
+  for(const r of this.state.sales){if(r.locationId!==locationId||String(r.date||'')<since||num(r.units)<=0)continue;sold.set(r.productId,(sold.get(r.productId)||0)+num(r.units));}
+  const out=[];
+  for(const [productId,units] of sold){const p=this.productById(productId);if(!p||!this.isOperational(p))continue;const daily=units/window;out.push({productId,min:Math.max(1,Math.ceil(daily*minDays)),max:Math.max(1,Math.ceil(daily*maxDays))});}
+  return out;
+ }
+ async saveParLevels(locationId,entries){
+  this.assertCan('products.edit','Setting stock levels');
+  if(!this.locationById(locationId))throw new Error('Choose a location.');
+  const clean=[];
+  for(const e of entries){
+   const p=this.productById(e.productId);if(!p)continue;
+   const blank=v=>v===null||v===undefined||v==='';
+   if(blank(e.min)&&blank(e.max)){clean.push({productId:p.id,remove:true});continue;}
+   const min=Number(blank(e.min)?0:e.min),max=Number(blank(e.max)?e.min:e.max);
+   if(!Number.isInteger(min)||!Number.isInteger(max)||min<0||max<0)throw new Error(`${p.productName}: levels must be whole numbers of zero or more.`);
+   if(max<min)throw new Error(`${p.productName}: the maximum (${fmt(max)}) is below the minimum (${fmt(min)}).`);
+   clean.push({productId:p.id,min,max});
+  }
+  let changed=0;
+  await this.atomicState(()=>{
+   for(const c of clean){
+    const i=this.state.parLevels.findIndex(r=>r.productId===c.productId&&r.locationId===locationId);
+    if(c.remove){if(i>=0){this.state.parLevels.splice(i,1);changed++;}continue;}
+    if(i>=0){const r=this.state.parLevels[i];if(r.min!==c.min||r.max!==c.max){r.min=c.min;r.max=c.max;r.updatedAt=iso();changed++;}}
+    else{this.state.parLevels.push({id:uid('par'),productId:c.productId,locationId,min:c.min,max:c.max,updatedAt:iso()});changed++;}
+   }
+   if(changed)this.audit('Stock levels updated',`${this.locationName(locationId)}: ${fmt(changed)} product level(s) changed`);
+  },'products.edit');
+  return changed;
+ }
+ openStockLevels(locationId='',filter=''){
+  this.assertCan('products.view','Viewing stock levels');
+  const locs=this.state.locations;if(!locs.length)throw new Error('Add a location first.');
+  const loc=locs.find(l=>l.id===locationId)?.id||this.defaultWorkingLocationId()||locs[0].id,canEdit=this.can('products.edit');
+  const q=slug(filter),all=this.activeProducts().filter(p=>!q||slug(`${p.productName} ${p.sku} ${p.barcode||''}`).includes(q));
+  const rows=all.sort((a,b)=>Number(Boolean(this.parLevel(b.id,loc)))-Number(Boolean(this.parLevel(a.id,loc)))||this.qtyAt(b.id,loc)-this.qtyAt(a.id,loc)||String(a.productName).localeCompare(String(b.productName))).slice(0,200);
+  const set=this.state.parLevels.filter(r=>r.locationId===loc).length;
+  this.modal('Stock levels by location',`<form id="parForm" onsubmit="return false"><div class="form-grid">
+   <label class="field"><span>Location</span><select name="loc">${this.locationOptionsHTML(loc,locs)}</select></label>
+   <label class="field"><span>Find product</span><input name="q" value="${esc(filter)}" placeholder="Name, SKU, or barcode" autocomplete="off"></label></div>
+   <p style="color:var(--muted);margin:6px 0 10px">${fmt(set)} product(s) have levels at ${esc(this.locationName(loc))}. When on hand plus on-the-way falls to the minimum, the replenishment plan tops it up to the maximum. Blank both to remove a level.</p>
+   ${canEdit?`<div class="header-actions" style="justify-content:flex-start;align-items:flex-end;margin-bottom:10px"><label class="field" style="margin:0;width:120px"><span>Min covers (days)</span><input name="minDays" type="number" min="1" step="1" value="7"></label><label class="field" style="margin:0;width:120px"><span>Max covers (days)</span><input name="maxDays" type="number" min="1" step="1" value="14"></label><button type="button" class="button ghost" id="parSuggest">Suggest from last 30 days of sales here</button></div>`:''}
+   <div class="table-wrap"><table><thead><tr><th>Product</th><th>On hand here</th><th>On the way</th><th>Min</th><th>Max</th></tr></thead><tbody>${rows.map(p=>{const r=this.parLevel(p.id,loc);return `<tr data-par-row="${p.id}"><td>${esc(p.productName)}<small class="cell-sub">${esc(p.sku)}${num(p.casePack)>1?` · case ${fmt(p.casePack)}`:''}</small></td><td>${fmt(this.qtyAt(p.id,loc))}</td><td>${fmt(this.incomingTo(p.id,loc))}</td><td><input data-par-min="${p.id}" type="number" min="0" step="1" value="${r?esc(r.min):''}" style="width:90px" ${canEdit?'':'disabled'}></td><td><input data-par-max="${p.id}" type="number" min="0" step="1" value="${r?esc(r.max):''}" style="width:90px" ${canEdit?'':'disabled'}></td></tr>`;}).join('')}</tbody></table></div>
+   ${all.length>200?`<p style="color:var(--muted)">Showing 200 of ${fmt(all.length)} products — search to find others.</p>`:''}</form>`,
+   `<button class="button ghost" data-modal-cancel>Close</button>${this.can('transfers.create')?'<button class="button secondary" id="parPlan">Replenishment plan</button>':''}${canEdit?'<button class="button primary" id="parSave">Save levels</button>':''}`,'Locations');
+  const form=$('#parForm');$('[data-modal-cancel]').onclick=()=>this.closeModal();
+  const edits=new Map(),read=()=>{for(const i of $$('[data-par-min]',form))edits.set(i.dataset.parMin,{productId:i.dataset.parMin,min:i.value,max:$(`[data-par-max="${i.dataset.parMin}"]`,form).value});};
+  const dirty=()=>{read();return [...edits.values()].filter(e=>{const r=this.parLevel(e.productId,loc);return String(e.min)!==String(r?r.min:'')||String(e.max)!==String(r?r.max:'');});};
+  form.elements.loc.onchange=()=>this.openStockLevels(form.elements.loc.value,form.elements.q.value);
+  form.elements.q.oninput=debounce(()=>{const v=form.elements.q.value;this.openStockLevels(loc,v);const el=$('#parForm [name="q"]');el.focus();el.setSelectionRange(v.length,v.length);},300);
+  const sug=$('#parSuggest');if(sug)sug.onclick=()=>{const s=this.suggestParLevels(loc,{minDays:Math.max(1,num(form.elements.minDays.value)||7),maxDays:Math.max(1,num(form.elements.maxDays.value)||14)});let n=0;for(const x of s){const mi=$(`[data-par-min="${x.productId}"]`,form);if(!mi)continue;mi.value=x.min;$(`[data-par-max="${x.productId}"]`,form).value=Math.max(x.max,x.min);n++;}this.toast(n?`${n} level(s) suggested from recent sales at ${this.locationName(loc)}. Review, then save.`:`No sales were recorded at ${this.locationName(loc)} in the last 30 days for the products shown.`,n?'success':'warning');};
+  const save=$('#parSave');if(save)save.onclick=()=>this.runAction(save,async()=>{const changes=dirty();const n=await this.saveParLevels(loc,changes);this.toast(n?`${fmt(n)} stock level(s) saved for ${this.locationName(loc)}.`:'No level changed.');this.openStockLevels(loc,form.elements.q.value);});
+  const plan=$('#parPlan');if(plan)plan.onclick=()=>this.runAction(plan,()=>this.openReplenishmentPlanner('',null));
+ }
+
  /* ---- Transfer dialogs ----------------------------------------------------------------- */
  locationOptionsHTML(selected,locations=this.state.locations){return locations.map(l=>`<option value="${l.id}" ${l.id===selected?'selected':''}>${esc(l.name)}${l.code?` · ${esc(l.code)}`:''}</option>`).join('');}
  transferSourceOptions(fromLocationId,excludeIds=[]){
@@ -3454,6 +3755,7 @@ class InventoryApp {
     <label class="field"><span>To location</span><select name="toLocationId">${this.locationOptionsHTML(t.toLocationId)}</select></label>
     <label class="field"><span>Transfer type</span><select name="type">${TRANSFER_TYPES.map(x=>`<option ${t.type===x?'selected':''}>${x}</option>`).join('')}</select><small class="field-hint">Replenishment: warehouse → store. Return: store → warehouse. Rebalance: store → store.</small></label>
     <label class="field"><span>Prepared by</span><input name="preparedBy" value="${esc(t.preparedBy||'')}"></label>
+    <label class="field"><span>Expected arrival (optional)</span><input name="expectedArrival" type="date" value="${esc(t.expectedArrival||'')}"></label>
     <label class="field"><span>Carrier / driver</span><input name="carrier" value="${esc(t.carrier||'')}"></label>
     <label class="field"><span>Vehicle / plate</span><input name="vehicle" value="${esc(t.vehicle||'')}"></label>
     <label class="field"><span>Notes</span><input name="notes" value="${esc(t.notes||'')}"></label>
@@ -3475,7 +3777,7 @@ class InventoryApp {
   const t=this.workingTransfer,o=this.formObject(form);
   t.number=String(o.number||t.number).trim();t.date=o.date||t.date;
   t.fromLocationId=o.fromLocationId;t.toLocationId=o.toLocationId;t.type=TRANSFER_TYPES.includes(o.type)?o.type:t.type;
-  t.preparedBy=o.preparedBy||'';t.carrier=o.carrier||'';t.vehicle=o.vehicle||'';t.notes=o.notes||'';
+  t.preparedBy=o.preparedBy||'';t.carrier=o.carrier||'';t.vehicle=o.vehicle||'';t.notes=o.notes||'';t.expectedArrival=/^\d{4}-\d{2}-\d{2}$/.test(String(o.expectedArrival||''))?o.expectedArrival:'';
   for(const input of $$('[data-line-qty]',form)){
    const line=t.lines.find(l=>l.id===input.dataset.lineQty);
    if(line)line.qty=Math.max(0,Math.floor(Number(input.value)||0));
@@ -3540,11 +3842,14 @@ class InventoryApp {
   const errors=this.validateTransferDraft(t);
   if(errors.length&&thenDispatch)throw new Error(errors.join(' '));
   if(!t.lines.length)throw new Error('Add at least one item before saving.');
+  /* Check dispatch rights before the draft is saved, so an approval asked for here is not spent
+     on the draft save and the retry does not find the editor already closed. */
+  if(thenDispatch){this.assertCan('transfers.dispatch','Dispatching a transfer');this.assertWithinLimit('dispatch',this.transferValue(t),`Dispatching ${t.number} (${money(this.transferValue(t),this.state.settings.currency)})`);}
   await this.atomicState(()=>{
    const index=this.state.transfers.findIndex(x=>x.id===t.id);
    if(index>=0)this.state.transfers[index]=clone(t);else this.state.transfers.unshift(clone(t));
    this.commitTransferHighWater(t.number);
-  },'transfers.create');
+  },'transfers.create',{keepElevation:thenDispatch});
   const saved=this.transferById(t.id);
   this.workingTransfer=null;
   if(thenDispatch){
@@ -3567,11 +3872,12 @@ class InventoryApp {
     <div class="stat-row"><span>Prepared by</span><strong>${esc(t.preparedBy||'—')}</strong></div>
     <div class="stat-row"><span>Dispatched</span><strong>${t.dispatchedAt?new Date(t.dispatchedAt).toLocaleString():'Not yet'}${t.releasedBy?` · ${esc(t.releasedBy)}`:''}</strong></div>
     <div class="stat-row"><span>Received</span><strong>${t.receivedAt?new Date(t.receivedAt).toLocaleString():'Not yet'}${t.receivedBy?` · ${esc(t.receivedBy)}`:''}</strong></div>
+    ${t.expectedArrival?`<div class="stat-row"><span>Expected arrival</span><strong>${esc(t.expectedArrival)}</strong></div>`:''}
     ${t.carrier||t.vehicle?`<div class="stat-row"><span>Carrier</span><strong>${esc([t.carrier,t.vehicle].filter(Boolean).join(' · '))}</strong></div>`:''}
     ${exports.length?`<div class="stat-row"><span>Files sent</span><strong>${exports.map(e=>`${e.kind==='receipt'?'Confirmation':'Transfer file'} ${esc(new Date(e.at).toLocaleString())}`).join('<br>')}</strong></div>`:''}
     ${t.cancelReason?`<div class="stat-row"><span>Cancelled because</span><strong>${esc(t.cancelReason)}</strong></div>`:''}
    </div>
-   ${this.transferOverdue(t)?`<div class="notice danger" style="margin-top:12px"><strong>Overdue.</strong> In transit for ${fmt(this.transferDaysInTransit(t))} days (alert after ${fmt(this.state.settings.transitAlertDays)}). ${inbound?'Receive it, or reject it if it will not arrive.':`Chase ${esc(this.transferToName(t))} for their receiving confirmation, or receive it here.`}</div>`:''}
+   ${this.transferOverdue(t)?`<div class="notice danger" style="margin-top:12px"><strong>Overdue.</strong> In transit for ${fmt(this.transferDaysInTransit(t))} days (${t.expectedArrival?`expected ${esc(t.expectedArrival)}`:`alert after ${fmt(this.state.settings.transitAlertDays)}`}). ${inbound?'Receive it, or reject it if it will not arrive.':`Chase ${esc(this.transferToName(t))} for their receiving confirmation, or receive it here.`}</div>`:''}
    ${t.overageUnresolved?`<div class="notice warning" style="margin-top:12px"><strong>${fmt(t.overageUnresolved)} over-delivered unit(s) could not be deducted</strong> from ${esc(this.transferFromName(t))} because its shelf count was too low. Count that location.</div>`:''}
    <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Product</th><th>Sent</th><th>Received</th><th>Damaged</th><th>Variance</th><th>Extra</th><th>Value</th></tr></thead><tbody>${lines.map(l=>`<tr><td>${esc(l.productName)}${l.returnReason?` <span class="badge watch">${esc(l.returnReason)}</span>`:''}<small class="cell-sub">${esc(l.sku)}</small></td><td>${fmt(l.qty)}</td><td>${fmt(l.receivedQty||0)}</td><td>${num(l.damagedQty)?fmt(l.damagedQty):'—'}</td><td>${num(l.varianceQty)?`<span class="badge danger">−${fmt(l.varianceQty)}</span>`:'—'}</td><td>${num(l.overQty)?`<span class="badge purple">+${fmt(l.overQty)}</span>`:'—'}</td><td>${money(num(l.qty)*num(l.unitCost),this.state.settings.currency)}</td></tr>`).join('')}</tbody></table></div>
    ${t.varianceApprovedBy||t.blindCount||t.requestNumber?`<p style="margin:10px 0 0;color:var(--muted)">${[t.requestNumber?`Fulfils stock request ${esc(t.requestNumber)}`:'',t.blindCount?'Counted blind':'',t.varianceApprovedBy?`Variance approved by ${esc(t.varianceApprovedBy)}`:''].filter(Boolean).join(' · ')}</p>`:''}
@@ -3699,12 +4005,12 @@ class InventoryApp {
   return `<div class="delivery-note">
    <header class="dn-head">
     <div><h2>${esc(s.businessName||'Business')}</h2>${s.businessAddress?`<p>${esc(s.businessAddress)}</p>`:''}<p class="dn-kind">Delivery Receipt / Transfer Note · ${esc(t.type||'Replenishment')}</p></div>
-    <div class="dn-number"><strong>${esc(t.number)}</strong><p>${esc(t.date||day(new Date(t.createdAt||Date.now())))}</p><p class="dn-status">${esc(t.status)}</p></div>
+    <div class="dn-number">${code128Svg(t.number)}<strong>${esc(t.number)}</strong><p>${esc(t.date||day(new Date(t.createdAt||Date.now())))}</p><p class="dn-status">${esc(t.status)}</p></div>
    </header>
    <section class="dn-parties">
     <div><h3>From</h3><strong>${esc(this.transferFromName(t))}</strong>${(from?.address||t.externalFrom?.address)?`<p>${esc(from?.address||t.externalFrom.address)}</p>`:''}${(from?.type||t.externalFrom?.type)?`<p>${esc(from?.type||t.externalFrom.type)}</p>`:''}${(from?.code||t.externalFrom?.code)?`<p>Site code ${esc(from?.code||t.externalFrom.code)}</p>`:''}</div>
     <div><h3>To</h3><strong>${esc(this.transferToName(t))}</strong>${to?.address?`<p>${esc(to.address)}</p>`:''}${to?.type?`<p>${esc(to.type)}</p>`:''}${to?.code?`<p>Site code ${esc(to.code)}</p>`:''}</div>
-    <div><h3>Consignment</h3>${t.carrier?`<p>Carrier: ${esc(t.carrier)}</p>`:''}${t.vehicle?`<p>Vehicle: ${esc(t.vehicle)}</p>`:''}<p>Dispatched: ${t.dispatchedAt?new Date(t.dispatchedAt).toLocaleString():'—'}</p><p>Received: ${t.receivedAt?new Date(t.receivedAt).toLocaleString():'—'}</p></div>
+    <div><h3>Consignment</h3>${t.carrier?`<p>Carrier: ${esc(t.carrier)}</p>`:''}${t.vehicle?`<p>Vehicle: ${esc(t.vehicle)}</p>`:''}<p>Dispatched: ${t.dispatchedAt?new Date(t.dispatchedAt).toLocaleString():'—'}</p>${t.expectedArrival?`<p>Expected: ${esc(t.expectedArrival)}</p>`:''}<p>Received: ${t.receivedAt?new Date(t.receivedAt).toLocaleString():'—'}</p></div>
    </section>
    <table class="dn-table"><thead><tr><th>#</th><th>Product</th><th>SKU</th><th class="num">Qty sent</th>${received?'<th class="num">Qty received</th>':''}<th class="num">Unit cost</th><th class="num">Line value</th></tr></thead>
    <tbody>${lines.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(l.productName)}${l.returnReason?` <em>(${esc(l.returnReason)})</em>`:''}</td><td>${esc(l.sku)}</td><td class="num">${fmt(l.qty)}</td>${received?`<td class="num">${fmt(num(l.receivedQty)+num(l.overQty))}${num(l.varianceQty)?` (−${fmt(l.varianceQty)}${num(l.damagedQty)?`, ${fmt(l.damagedQty)} damaged`:''})`:''}${num(l.overQty)?` (+${fmt(l.overQty)} extra)`:''}</td>`:''}<td class="num">${money(l.unitCost,s.currency)}</td><td class="num">${money(num(l.qty)*num(l.unitCost),s.currency)}</td></tr>`).join('')}</tbody>
@@ -3732,7 +4038,7 @@ class InventoryApp {
   const s=this.state.settings,lines=this.transferLines(t).map(l=>({l,p:this.productById(l.productId)||{}}))
    .sort((a,b)=>String(a.p.bin||'~').localeCompare(String(b.p.bin||'~'),undefined,{numeric:true})||String(a.l.sku).localeCompare(String(b.l.sku)));
   return `<div class="delivery-note">
-   <header class="dn-head"><div><h2>${esc(s.businessName||'Business')}</h2><p class="dn-kind">Pick list · ${esc(t.type||'Replenishment')}</p></div><div class="dn-number"><strong>${esc(t.number)}</strong><p>${esc(t.date||day())}</p><p class="dn-status">${esc(t.status)}</p></div></header>
+   <header class="dn-head"><div><h2>${esc(s.businessName||'Business')}</h2><p class="dn-kind">Pick list · ${esc(t.type||'Replenishment')}</p></div><div class="dn-number">${code128Svg(t.number)}<strong>${esc(t.number)}</strong><p>${esc(t.date||day())}</p><p class="dn-status">${esc(t.status)}</p></div></header>
    <section class="dn-parties"><div><h3>Pick at</h3><strong>${esc(this.transferFromName(t))}</strong></div><div><h3>Deliver to</h3><strong>${esc(this.transferToName(t))}</strong></div><div><h3>Totals</h3><p>${fmt(lines.length)} line(s) · ${fmt(this.transferUnits(t))} unit(s)</p>${t.requestNumber?`<p>For request ${esc(t.requestNumber)}</p>`:''}</div></section>
    <table class="dn-table"><thead><tr><th>#</th><th>Bin</th><th>SKU</th><th>Barcode</th><th>Product</th><th class="num">Pick</th><th class="num">Picked ☐</th></tr></thead>
    <tbody>${lines.map(({l,p},i)=>`<tr><td>${i+1}</td><td>${esc(p.bin||'—')}</td><td>${esc(l.sku)}</td><td>${esc(p.barcode||'')}</td><td>${esc(l.productName)}${num(p.casePack)>1?` <em>(case ${fmt(p.casePack)})</em>`:''}${l.returnReason?` <em>(${esc(l.returnReason)})</em>`:''}</td><td class="num">${fmt(l.qty)}</td><td class="num">____</td></tr>`).join('')}</tbody></table>
@@ -3866,6 +4172,11 @@ class InventoryApp {
     ${!adminEditor&&!lockPerms?'<div class="notice">You can grant only the permissions you hold yourself. Other boxes are locked.</div>':''}
     ${lockPerms?'':(()=>{const sources=this.state.users.filter(u=>u.role!=='Admin'&&u.id!==existing?.id&&this.canManageUser(u));return sources.length?`<label class="field copy-perms"><span>Copy permissions from another person</span><select id="userCopyFrom"><option value="">Choose a person…</option>${sources.map(u=>`<option value="${u.id}">${esc(u.name)} · ${esc(u.role)} · ${esc(this.permissionSummary(u))}</option>`).join('')}</select><small class="field-hint">Fills the boxes below with their permissions. Boxes you cannot grant stay as they are.</small></label>`:'';})()}
     ${this.permissionMatrixHTML(perms,{grantable,readOnly:lockPerms})}
+    <h3 class="form-section-title">Limits</h3>
+    <div class="form-grid">
+     <label class="field"><span>Maximum discount % per sale (blank = no limit)</span><input name="maxDiscountPercent" type="number" min="0" max="100" step="0.1" value="${esc(existing?.maxDiscountPercent??'')}" ${lockPerms?'disabled':''}><small class="field-hint">Applies with <em>Apply discounts</em>. Larger discounts need a colleague whose limit covers them.</small></label>
+     <label class="field"><span>Maximum value per dispatched transfer (blank = no limit)</span><input name="maxDispatchValue" type="number" min="0" step="${currencyStep(this.state.settings.currency)}" value="${esc(existing?.maxDispatchValue??'')}" ${lockPerms?'disabled':''}><small class="field-hint">Applies with <em>Dispatch transfers</em>, at recorded unit cost in ${esc(this.state.settings.currency)}.</small></label>
+    </div>
     <h3 class="form-section-title">Temporary access</h3>
     <label class="field" style="max-width:320px"><span>Access ends on (optional)</span><input type="date" name="accessExpiresOn" value="${esc(existing?.accessExpiresOn||'')}" ${lockPerms?'disabled':''}><small class="field-hint">For relief managers, temps, and seasonal staff. They cannot sign in after this date. Leave blank for no end date.</small></label>
     <h3 class="form-section-title">Location access</h3>
@@ -3920,7 +4231,7 @@ class InventoryApp {
  }
  /* Reads the user dialog and applies every privilege rule before anything is saved. Exposed as
     its own method so the rules can be exercised without the dialog. */
- validateUserChange({existing=null,name,role,pin,active=true,permissions=[],locationIds=[],allLocations=false,notes,accessExpiresOn}){
+ validateUserChange({existing=null,name,role,pin,active=true,permissions=[],locationIds=[],allLocations=false,notes,accessExpiresOn,maxDiscountPercent,maxDispatchValue}){
   const errors=[],first=!existing&&!this.state.users.length,adminEditor=!this.securityEnabled()||this.isAdmin();
   const self=existing&&existing.id===this.state.ui.currentUserId;
   name=String(name||'').trim();role=first?'Admin':String(role||'');
@@ -3960,9 +4271,20 @@ class InventoryApp {
    if(!/^\d{4}-\d{2}-\d{2}$/.test(expires))errors.push('Enter the access end date as a calendar date.');
    else if(expires<day()&&expires!==String(existing?.accessExpiresOn||''))errors.push('The access end date cannot be in the past. Choose today or later, or leave it blank.');
   }
+  /* v1.7 limits: blank is no limit; a non-Admin manager cannot hand out more than they have. */
+  const limits={};
+  for(const [kind,raw] of [['discount',maxDiscountPercent],['dispatch',maxDispatchValue]]){
+   const def=USER_LIMITS[kind],field=def.field;
+   let v=raw===undefined?(existing?.[field]??null):(raw===null||raw===''?null:Number(raw));
+   if(role==='Admin')v=null;
+   else if(self&&!adminEditor)v=existing?.[field]??null;
+   else if(v!==null&&(!Number.isFinite(v)||v<0||v>def.max))errors.push(`Enter a ${def.label} between 0 and ${kind==='discount'?'100%':'a positive amount'}, or leave it blank.`);
+   else if(!adminEditor&&raw!==undefined){const mine=this.userLimit(this.currentUser(),kind),given=v===null?Infinity:v;if(given>mine&&(!existing||given!==this.userLimit(existing,kind)))errors.push(`You cannot give a ${def.label} above your own (${this.limitLabel(kind,mine)}).`);}
+   limits[field]=v;
+  }
   if(existing&&!errors.length)this.assertAdminSurvives(existing.id,{role,active});
   const customized=role!=='Admin'&&role!=='Custom'&&JSON.stringify(this.presetPermissions(role))!==JSON.stringify(normalizePermissions(perms));
-  return {errors,name,role,pin,active,permissions:perms,locationIds:locs,customized,notes:String(notes??existing?.notes??''),accessExpiresOn:expires};
+  return {errors,name,role,pin,active,permissions:perms,locationIds:locs,customized,notes:String(notes??existing?.notes??''),accessExpiresOn:expires,limits};
  }
  async saveUser(id){
   if(this.securityEnabled())this.assertCan('users.manage','Changing user information');
@@ -3970,7 +4292,7 @@ class InventoryApp {
   const existing=id?this.state.users.find(u=>u.id===id):null;
   const matrix=$('[data-perm-matrix]',form);
   const v=this.validateUserChange({existing,name:o.name,notes:o.notes,role:o.role??existing?.role,pin:String(o.pin||'').trim(),active:existing?Boolean(o.active)||existing.id===this.state.ui.currentUserId:true,
-   permissions:matrix?this.matrixPermissions(matrix):[],locationIds:$$('[name="locationIds"]',form).filter(b=>b.checked).map(b=>b.value),allLocations:Boolean($('#userAllLocations')?.checked),accessExpiresOn:form.elements.accessExpiresOn&&!form.elements.accessExpiresOn.disabled?form.elements.accessExpiresOn.value:undefined});
+   permissions:matrix?this.matrixPermissions(matrix):[],locationIds:$$('[name="locationIds"]',form).filter(b=>b.checked).map(b=>b.value),allLocations:Boolean($('#userAllLocations')?.checked),maxDiscountPercent:form.elements.maxDiscountPercent&&!form.elements.maxDiscountPercent.disabled?form.elements.maxDiscountPercent.value:undefined,maxDispatchValue:form.elements.maxDispatchValue&&!form.elements.maxDispatchValue.disabled?form.elements.maxDispatchValue.value:undefined,accessExpiresOn:form.elements.accessExpiresOn&&!form.elements.accessExpiresOn.disabled?form.elements.accessExpiresOn.value:undefined});
   if(v.errors.length){$('#userValidation').innerHTML=`<div class="notice danger">${v.errors.map(esc).join('<br>')}</div>`;return;}
   await this.commitUser(existing,v);
   this.closeModal();this.toast(existing?'User updated.':`${v.name} added as ${v.role}.`);this.renderNav();this.navigate(this.sectionAllowed('users')?'users':'dashboard');
@@ -3982,15 +4304,18 @@ class InventoryApp {
     const before={role:existing.role,perms:this.userPermissions(existing),locs:(existing.locationIds||[]).slice(),active:existing.active!==false,expires:String(existing.accessExpiresOn||'')};
     Object.assign(existing,{name:v.name,role:v.role,permissions:v.permissions,locationIds:v.locationIds,customized:v.customized,active:v.active,notes:v.notes,updatedAt:now});
     if(v.accessExpiresOn)existing.accessExpiresOn=v.accessExpiresOn;else delete existing.accessExpiresOn;
+    const limitChanges=[];
+    for(const [kind,def] of Object.entries(USER_LIMITS)){const was=existing[def.field]??null,now=v.limits?.[def.field]??null;if(was!==now)limitChanges.push(`${def.label} ${this.limitLabel(kind,was===null?Infinity:was)} → ${this.limitLabel(kind,now===null?Infinity:now)}`);if(now===null)delete existing[def.field];else existing[def.field]=now;}
     delete existing.legacyReadOnly;
     if(v.pin)this.setUserPin(existing,v.pin);
     const added=v.permissions.filter(k=>!before.perms.includes(k)&&k!=='*'),removed=before.perms.filter(k=>!v.permissions.includes(k)&&k!=='*');
     const label=k=>PERMISSIONS.find(p=>p.key===k)?.label||k;
-    const changes=[before.role!==v.role?`role ${before.role} → ${v.role}`:'',added.length?`granted ${added.map(label).join(', ')}`:'',removed.length?`removed ${removed.map(label).join(', ')}`:'',JSON.stringify(before.locs)!==JSON.stringify(v.locationIds)?`locations: ${v.locationIds.length?v.locationIds.map(x=>this.locationName(x)).join(', '):'all'}`:'',before.active!==v.active?(v.active?'re-activated':'deactivated'):'',before.expires!==String(v.accessExpiresOn||'')?(v.accessExpiresOn?`access ends ${v.accessExpiresOn}`:'access end date removed'):'',v.pin?'PIN reset':''].filter(Boolean);
+    const changes=[before.role!==v.role?`role ${before.role} → ${v.role}`:'',added.length?`granted ${added.map(label).join(', ')}`:'',removed.length?`removed ${removed.map(label).join(', ')}`:'',JSON.stringify(before.locs)!==JSON.stringify(v.locationIds)?`locations: ${v.locationIds.length?v.locationIds.map(x=>this.locationName(x)).join(', '):'all'}`:'',before.active!==v.active?(v.active?'re-activated':'deactivated'):'',before.expires!==String(v.accessExpiresOn||'')?(v.accessExpiresOn?`access ends ${v.accessExpiresOn}`:'access end date removed'):'',...limitChanges,v.pin?'PIN reset':''].filter(Boolean);
     this.audit('User updated',`${v.name}: ${changes.join('; ')||'details edited'}`);
    }else{
     const user={id:uid('usr'),name:v.name,role:v.role,permissions:v.permissions,locationIds:v.locationIds,customized:v.customized,notes:v.notes,active:true,createdAt:now,updatedAt:now};
     if(v.accessExpiresOn)user.accessExpiresOn=v.accessExpiresOn;
+    for(const def of Object.values(USER_LIMITS))if(v.limits?.[def.field]!==null&&v.limits?.[def.field]!==undefined)user[def.field]=v.limits[def.field];
     this.setUserPin(user,v.pin);this.state.users.push(user);
     /* Creating the first user turns access control on; sign them straight in so nobody is
        locked out of the workspace they were already using. */
@@ -4063,6 +4388,151 @@ class InventoryApp {
    this.state.roles=this.state.roles.filter(x=>x.id!==id);
    this.audit('Role preset deleted',r.name);
   });
+ }
+
+ /* ---- Access package: the same roles and staff at every installation (v1.7) -------------------- */
+ /* Head office sets up role presets and people once, exports an access package, and each store
+    imports it. Locations travel by site code, PINs travel only as salted hashes (and only if the
+    Admin chooses), the package is checksummed and signed like a transfer file, and an import
+    adds and updates but never deletes anyone or touches the account doing the import. */
+ assertAdminOnly(label){if(this.securityEnabled()&&!this.isAdmin())throw new Error(`${label} is available to Admins only, because it can change anyone's access.`);}
+ buildAccessPackage({includePins=true}={}){
+  this.assertAdminOnly('Exporting the access package');
+  if(!this.state.users.length)throw new Error('There are no users to export yet.');
+  const s=this.state.settings,actor=this.currentUser();
+  const locRef=id=>{const l=this.locationById(id);return l?{code:l.code||'',name:l.name||''}:null;};
+  const file={format:ACCESS_PACKAGE_FORMAT,version:1,kind:'access',fileId:uid('apkg'),createdAt:iso(),createdBy:actor?.name||'',origin:{workspaceId:this.workspaceId(),businessName:s.businessName||''},includesPins:Boolean(includePins),
+   roles:this.state.roles.map(r=>({name:r.name,description:r.description||'',permissions:normalizePermissions(r.permissions)})),
+   users:this.state.users.map(u=>{
+    const o={name:u.name,role:u.role,permissions:u.role==='Admin'?['*']:this.userPermissions(u),active:u.active!==false,notes:u.notes||'',locations:(u.locationIds||[]).map(locRef).filter(Boolean)};
+    if(u.accessExpiresOn)o.accessExpiresOn=u.accessExpiresOn;
+    for(const def of Object.values(USER_LIMITS))if(u[def.field]!==undefined&&u[def.field]!==null)o[def.field]=u[def.field];
+    if(includePins){
+     if(u.pin!==undefined&&u.pin!==null&&u.pin!==''){const tmp={};this.setUserPin(tmp,u.pin);o.pinHash=tmp.pinHash;o.pinSalt=tmp.pinSalt;}
+     else if(u.pinHash){o.pinHash=u.pinHash;o.pinSalt=u.pinSalt||'';}
+    }
+    return o;
+   })};
+  this.signTransferFile(file);file.checksum=this.transferFileChecksum(file);
+  return file;
+ }
+ async exportAccessPackage(includePins=true){
+  const file=this.buildAccessPackage({includePins});
+  const code=this.stationLocation()?.code||'site';
+  const name=`access-package_${String(code).replace(/[^A-Za-z0-9-]+/g,'-')}_${day()}.json`;
+  downloadBlob(new Blob([JSON.stringify(file,null,2)],{type:'application/json'}),name);
+  await this.atomicState(()=>this.audit('Access package exported',`${fmt(file.users.length)} user(s), ${fmt(file.roles.length)} custom preset(s)${includePins?', with hashed PINs':', without PINs'}${file.signature?' · signed':''} · ${name}`));
+  this.toast(`${name} downloaded. Import it under Users and Roles at each installation.`);
+  return file;
+ }
+ parseAccessPackage(text,name='Access package'){
+  let file;try{file=typeof text==='string'?JSON.parse(text):text;}catch{throw new Error(`${name} is not a readable access package.`);}
+  const bad=r=>{throw new Error(`${name} is not a valid access package: ${r}.`);};
+  if(!file||typeof file!=='object'||Array.isArray(file))bad('the content is not an object');
+  if(file.format!==ACCESS_PACKAGE_FORMAT)bad(file.format===TRANSFER_FILE_FORMAT?'it is a transfer file — import it under Transfers':'the format marker is missing');
+  if(Number(file.version)!==1)bad(`version ${file.version} is not supported`);
+  if(file.checksum!==this.transferFileChecksum(file))throw new Error(`${name} failed its integrity check. It was edited or damaged after it was exported.`);
+  const auth=this.transferFileAuthenticity(file);
+  if(auth.status==='invalid')throw new Error(`${name} was refused: ${auth.reason}.`);
+  if(auth.status!=='verified'&&this.state.settings.requireSignedTransfers)throw new Error(`${name} is not signed with your exchange key, and Settings require signed files.`);
+  if(!Array.isArray(file.users)||!Array.isArray(file.roles))bad('the users or roles list is missing');
+  for(const u of file.users)if(!u||!String(u.name||'').trim())bad('a user has no name');
+  return file;
+ }
+ mapLocationRef(ref){const code=normalizeLocationCode(ref?.code);return (code&&this.state.locations.find(l=>normalizeLocationCode(l.code)===code))||(ref?.name&&this.state.locations.find(l=>slug(l.name)===slug(ref.name)))||null;}
+ planAccessImport(file){
+  this.assertAdminOnly('Importing an access package');
+  const me=this.currentUser(),roles=[],users=[];
+  const packageRoleNames=new Set(file.roles.map(r=>slug(r.name)));
+  for(const r of file.roles){
+   const name=String(r.name||'').trim(),perms=normalizePermissions(r.permissions).filter(k=>k!=='*');
+   if(!name||slug(name)==='custom'||ROLE_PRESETS.some(x=>slug(x.name)===slug(name))){roles.push({name,action:'skip',note:'Reserved or built-in preset name'});continue;}
+   if(!perms.length){roles.push({name,action:'skip',note:'No permissions'});continue;}
+   const existing=this.state.roles.find(x=>slug(x.name)===slug(name));
+   const same=existing&&JSON.stringify(normalizePermissions(existing.permissions))===JSON.stringify(perms)&&String(existing.description||'')===String(r.description||'');
+   roles.push({name,description:String(r.description||''),permissions:perms,existing,action:!existing?'create':same?'same':'update',note:existing&&!same?'Permissions or description differ':''});
+  }
+  for(const u of file.users){
+   const name=String(u.name||'').trim(),existing=this.state.users.find(x=>slug(x.name)===slug(name)),notes=[];
+   const validRole=u.role==='Admin'||u.role==='Custom'||ROLE_PRESETS.some(x=>x.name===u.role)||this.state.roles.some(x=>slug(x.name)===slug(u.role))||packageRoleNames.has(slug(u.role));
+   const role=validRole?String(u.role):'Custom';if(!validRole)notes.push(`Role “${u.role}” is unknown here; imported as Custom`);
+   const permissions=role==='Admin'?['*']:normalizePermissions(u.permissions).filter(k=>k!=='*');
+   const refs=Array.isArray(u.locations)?u.locations:[],mapped=[],missing=[];
+   for(const ref of refs){const l=this.mapLocationRef(ref);if(l)mapped.push(l.id);else missing.push(ref.code||ref.name||'?');}
+   const next={name,role,permissions,active:u.active!==false,notes:String(u.notes||''),locationIds:role==='Admin'?[]:[...new Set(mapped)],accessExpiresOn:role!=='Admin'&&/^\d{4}-\d{2}-\d{2}$/.test(String(u.accessExpiresOn||''))?u.accessExpiresOn:'',pinHash:u.pinHash||'',pinSalt:u.pinSalt||''};
+   for(const def of Object.values(USER_LIMITS)){const v=u[def.field];next[def.field]=role==='Admin'||v===undefined||v===null||!Number.isFinite(Number(v))?null:Number(v);}
+   if(missing.length)notes.push(`Location${missing.length===1?'':'s'} ${missing.join(', ')} not found here`);
+   let action,changes=[];
+   if(existing&&existing.id===me?.id){action='skip';notes.push('You are signed in as this person; change your own account by hand');}
+   else if(refs.length&&!mapped.length&&role!=='Admin'){action='skip';notes.push('None of their locations exist here, and importing them unrestricted would widen their access');}
+   else if(!role||(role!=='Admin'&&!permissions.length)){action='skip';notes.push('No permissions');}
+   else if(!existing&&!next.pinHash){action='skip';notes.push('The package has no PIN for this new person');}
+   else if(!existing)action='create';
+   else{
+    const before=this.userPermissions(existing),label=k=>this.permissionLabel(k);
+    if(existing.role!==role)changes.push(`role ${existing.role} → ${role}`);
+    const added=permissions.filter(k=>!before.includes(k)&&k!=='*'),removed=before.filter(k=>!permissions.includes(k)&&k!=='*');
+    if(added.length)changes.push(`adds ${added.map(label).join(', ')}`);if(removed.length)changes.push(`removes ${removed.map(label).join(', ')}`);
+    if(JSON.stringify([...(existing.locationIds||[])].sort())!==JSON.stringify([...next.locationIds].sort()))changes.push(`locations → ${next.locationIds.length?next.locationIds.map(id=>this.locationName(id)).join(', '):'all'}`);
+    if((existing.active!==false)!==next.active)changes.push(next.active?'re-activated':'deactivated');
+    if(String(existing.accessExpiresOn||'')!==next.accessExpiresOn)changes.push(next.accessExpiresOn?`access ends ${next.accessExpiresOn}`:'no end date');
+    for(const [kind,def] of Object.entries(USER_LIMITS))if((existing[def.field]??null)!==next[def.field])changes.push(`${def.label} ${this.limitLabel(kind,next[def.field]??Infinity)}`);
+    if(next.pinHash&&next.pinHash!==existing.pinHash)changes.push('PIN');
+    action=changes.length?'update':'same';
+   }
+   users.push({name,existing,next,action,changes,notes});
+  }
+  const remainingAdmins=this.state.users.filter(x=>x.active!==false&&x.role==='Admin'&&!users.some(p=>p.existing?.id===x.id&&['update'].includes(p.action)&&(p.next.role!=='Admin'||!p.next.active))).length+users.filter(p=>p.action==='create'&&p.next.role==='Admin'&&p.next.active).length;
+  return {roles,users,remainingAdmins};
+ }
+ async commitAccessImport(file,name='access package'){
+  const plan=this.planAccessImport(file);
+  if(plan.remainingAdmins<1)throw new Error('Importing this package would leave no active Admin here. Nothing was changed.');
+  const now=iso(),count={roles:0,created:0,updated:0};
+  await this.atomicState(()=>{
+   for(const r of plan.roles){
+    if(r.action==='create'){this.state.roles.push({id:uid('role'),name:r.name,description:r.description,permissions:r.permissions,createdAt:now,updatedAt:now});count.roles++;}
+    else if(r.action==='update'){Object.assign(r.existing,{description:r.description,permissions:r.permissions,updatedAt:now});count.roles++;}
+   }
+   for(const u of plan.users){
+    if(!['create','update'].includes(u.action))continue;
+    const n=u.next,target=u.action==='create'?{id:uid('usr'),createdAt:now}:u.existing;
+    Object.assign(target,{name:n.name,role:n.role,permissions:n.permissions,locationIds:n.locationIds,active:n.active,notes:n.notes,updatedAt:now});
+    target.customized=n.role!=='Admin'&&n.role!=='Custom'&&JSON.stringify(this.presetPermissions(n.role))!==JSON.stringify(normalizePermissions(n.permissions));
+    if(n.accessExpiresOn)target.accessExpiresOn=n.accessExpiresOn;else delete target.accessExpiresOn;
+    for(const def of Object.values(USER_LIMITS)){if(n[def.field]===null)delete target[def.field];else target[def.field]=n[def.field];}
+    if(n.pinHash){target.pinHash=n.pinHash;target.pinSalt=n.pinSalt;delete target.pin;}
+    delete target.legacyReadOnly;
+    if(u.action==='create'){this.state.users.push(target);count.created++;}else count.updated++;
+   }
+   if(!this.state.users.some(x=>x.active!==false&&x.role==='Admin'))throw new Error('Importing this package would leave no active Admin here. Nothing was changed.');
+   this.audit('Access package imported',`${name} from ${file.origin?.businessName||'another installation'}: ${fmt(count.created)} user(s) added, ${fmt(count.updated)} updated, ${fmt(count.roles)} preset(s) added or updated`);
+  });
+  this.renderNav();
+  return count;
+ }
+ chooseAccessPackage(){
+  this.assertAdminOnly('Importing an access package');
+  const input=document.createElement('input');input.type='file';input.accept='.json,application/json';input.hidden=true;
+  input.onchange=async()=>{const f=input.files[0];input.remove();if(!f)return;try{this.reviewAccessPackage(this.parseAccessPackage(await f.text(),f.name),f.name);}catch(err){this.toast(err.message,'error');}};
+  document.body.appendChild(input);input.click();
+ }
+ reviewAccessPackage(file,name){
+  const plan=this.planAccessImport(file),badge={create:'healthy',update:'info',same:'watch',skip:'danger'},word={create:'Add',update:'Update',same:'No change',skip:'Skipped'};
+  const pending=plan.users.filter(u=>['create','update'].includes(u.action)).length+plan.roles.filter(r=>['create','update'].includes(r.action)).length;
+  this.modal('Review access package',`<div class="notice success"><strong>Integrity check passed.</strong> Exported by ${esc(file.createdBy||'an Admin')} at ${esc(file.origin?.businessName||'another installation')} on ${esc(new Date(file.createdAt).toLocaleString())}. ${file.includesPins?'Includes hashed PINs.':'Contains no PINs — new people are skipped and existing people keep their PIN.'}</div>${this.authenticityNotice(file)}
+   ${plan.roles.length?`<h3 class="form-section-title">Role presets</h3><div class="table-wrap"><table><thead><tr><th>Preset</th><th>Result</th><th>Notes</th></tr></thead><tbody>${plan.roles.map(r=>`<tr><td>${esc(r.name)}</td><td><span class="badge ${badge[r.action]}">${word[r.action]}</span></td><td>${esc(r.note||'')}</td></tr>`).join('')}</tbody></table></div>`:''}
+   <h3 class="form-section-title">People</h3><div class="table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Result</th><th>Changes and notes</th></tr></thead><tbody>${plan.users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.next.role)}</td><td><span class="badge ${badge[u.action]}">${word[u.action]}</span></td><td>${esc([...u.changes,...u.notes].join(' · ')||'—')}</td></tr>`).join('')}</tbody></table></div>
+   <div class="notice" style="margin-top:10px">Nobody is deleted. People only in this installation stay as they are. Your own account is never changed by an import.</div>`,
+   `<button class="button ghost" data-modal-cancel>Cancel</button><button class="button primary" id="applyAccessPackage" ${pending?'':'disabled'}>Apply ${fmt(pending)} change(s)</button>`,'Users and Roles');
+  $('[data-modal-cancel]').onclick=()=>this.closeModal();
+  const go=$('#applyAccessPackage');go.onclick=()=>this.runAction(go,async()=>{const c=await this.commitAccessImport(file,name);this.closeModal();this.toast(`Access package applied: ${fmt(c.created)} added, ${fmt(c.updated)} updated, ${fmt(c.roles)} preset(s).`);this.navigate('users');});
+ }
+ openAccessExport(){
+  this.assertAdminOnly('Exporting the access package');
+  this.modal('Export access package',`<form id="accessExportForm"><p>Exports every role preset and every person — role, permissions, limits, end dates, and locations by site code — so the other installations can import the same access.</p><label class="field checkbox"><input type="checkbox" name="includePins" checked><span>Include PINs (as salted hashes) so staff sign in with the same PIN everywhere</span></label><div class="notice warning">Treat this file like a staff list: anyone holding it can see who works where. ${this.state.settings.transferExchangeKey?'It is signed with your exchange key.':'Set an exchange key in Settings to sign it.'}</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button primary" id="doAccessExport">Download package</button>`,'Users and Roles');
+  $('[data-modal-cancel]').onclick=()=>this.closeModal();
+  const go=$('#doAccessExport');go.onclick=()=>this.runAction(go,async()=>{await this.exportAccessPackage($('#accessExportForm [name="includePins"]').checked);this.closeModal();});
  }
  lockScreenElement(){
   let el=$('#lockScreen');
@@ -4459,7 +4929,7 @@ class InventoryApp {
   const transit=this.inTransitRows(),transitUnits=transit.reduce((a,r)=>a+num(r.qty),0);
   const selected=this.state.ui.locationStockId&&ls.some(l=>l.id===this.state.ui.locationStockId)?this.state.ui.locationStockId:(ls[0]?.id||'');
   const detail=this.stockByLocation(selected).map(r=>({row:r,p:this.productById(r.productId)})).filter(x=>x.p&&this.isOperational(x.p)).sort((a,b)=>num(b.row.qty)-num(a.row.qty));
-  const canEdit=this.can('locations'),locationActions=`${this.sectionAllowed('tax-profiles')?'<button class="button ghost" data-action="navigate" data-section-jump="tax-profiles">Tax Profiles</button>':''}<button class="button secondary" data-action="navigate" data-section-jump="transfers">Transfers</button>${canEdit?'<button class="button primary" data-action="add-location">＋ Add location</button>':''}`;
+  const canEdit=this.can('locations'),locationActions=`${this.sectionAllowed('tax-profiles')?'<button class="button ghost" data-action="navigate" data-section-jump="tax-profiles">Tax Profiles</button>':''}<button class="button secondary" data-action="navigate" data-section-jump="transfers">Transfers</button><button class="button secondary" data-action="stock-levels">Stock levels</button>${canEdit?'<button class="button primary" data-action="add-location">＋ Add location</button>':''}`;
   return this.pageHeader('Locations','Track inventory across stores, rooms, warehouses, and bins. A product can hold stock at several locations at once.',locationActions)+
    (transitUnits?`<div class="notice warning"><strong>${fmt(transitUnits)} unit(s) are in transit</strong> across ${fmt(new Set(transit.map(r=>r.productId)).size)} product(s). They remain in your total stock and valuation but are not counted at any location until the destination confirms receipt. <button class="button ghost small" data-action="navigate" data-section-jump="transfers">Open transfers</button></div>`:'')+
    `<div class="panel-grid">${ls.map(l=>{const t=this.locationTotals(l.id);return `<section class="panel"><header class="panel-header"><div><h2>${esc(l.name)}${l.code?` <span class="badge info">${esc(l.code)}</span>`:''}${this.state.settings.stationLocationId===l.id?' <span class="badge purple">This installation</span>':''}</h2><p>${esc(l.type||'Storage location')} · ${esc(l.address||'No address')}</p></div>${canEdit?`<button class="icon-button" data-action="edit-location" data-id="${l.id}">✎</button>`:''}</header><div class="panel-body"><div class="stat-list"><div class="stat-row"><span>Products held</span><strong>${fmt(t.products)}</strong></div><div class="stat-row"><span>Units on hand</span><strong>${fmt(t.units)}</strong></div><div class="stat-row"><span>Cost value</span><strong>${money(t.cost,currency)}</strong></div><div class="stat-row"><span>Retail value</span><strong>${money(t.retail,currency)}</strong></div><div class="stat-row"><span>Tax profile</span><strong>${configuredNumber(l.taxRate)?`${esc(l.taxLabel||'Tax')} ${num(l.taxRate).toFixed(3).replace(/\.?0+$/,'')}%`:'Product/default fallback'}</strong></div><div class="stat-row"><span>Jurisdiction</span><strong>${esc([l.countryCode?countryName(l.countryCode):'',l.region||'',l.postalCode||''].filter(Boolean).join(' · ')||'Not configured')}</strong></div><div class="stat-row"><span>At or below reorder point</span><strong>${fmt(t.risks)}</strong></div></div></div></section>`}).join('')}</div>
@@ -4479,6 +4949,21 @@ class InventoryApp {
   const requests=this.state.stockRequests.filter(r=>r.direction==='inbound'&&r.status==='Received'&&this.locationAllowed(r.fromLocationId)).length;
   const items=[overdue?`<strong>${fmt(overdue)}</strong> overdue in transit`:'',incoming?`<strong>${fmt(incoming)}</strong> incoming to receive`:'',confirmations?`<strong>${fmt(confirmations)}</strong> confirmation(s) to send`:'',requests?`<strong>${fmt(requests)}</strong> stock request(s) to fulfil`:''].filter(Boolean);
   return items.length?`<div class="notice ${overdue?'danger':'warning'} attention-strip"><span><strong>Transfers need attention:</strong> ${items.join(' · ')}.</span><button class="button ${overdue?'primary':'secondary'} small" data-action="navigate" data-section-jump="transfers">Open Transfers</button></div>`:'';
+ }
+ /* v1.7 scan-to-open: a receiving dock scans the barcode on the delivery note and lands on the
+    count screen when the delivery is theirs to receive, otherwise on its details. */
+ findTransferByNumber(code){const k=slug(code);if(!k)return null;return this.state.transfers.find(t=>slug(t.number)===k)||this.state.transfers.find(t=>t.remoteNumber&&slug(t.remoteNumber)===k)||null;}
+ openByDocumentNumber(code){
+  const text=String(code||'').trim();if(!text)return null;
+  const t=this.findTransferByNumber(text);
+  if(t){
+   const receivable=t.status==='In Transit'&&this.can('transfers.receive')&&this.locationAllowed(t.toLocationId)&&(t.direction==='inbound'||!this.transferFileSent(t,'shipment'));
+   if(receivable)this.openReceiveTransfer(t.id);else this.viewTransfer(t.id);
+   return t;
+  }
+  const k=slug(text),r=this.state.stockRequests.find(x=>slug(x.number)===k||(x.remoteNumber&&slug(x.remoteNumber)===k));
+  if(r){this.viewStockRequest(r.id);return r;}
+  throw new Error(`No delivery or stock request numbered ${text} is in this workspace. If it came from another site, import its file first.`);
  }
  transferStatusClass(status){return {'Draft':'watch','In Transit':'info','Received':'healthy','Received with Variance':'warning','Cancelled':'danger'}[status]||'info';}
  render_transfers(){
@@ -4504,7 +4989,7 @@ class InventoryApp {
    ...awaiting.map(t=>`<div class="stat-row"><span><strong>Waiting for ${esc(this.transferToName(t))} to confirm ${esc(t.number)}</strong><small class="cell-sub">File sent ${esc(new Date((t.fileEvents||[]).filter(e=>e.kind==='shipment').pop()?.at||t.dispatchedAt).toLocaleDateString())} · import their confirmation when it arrives</small></span></div>`)
   ];
   return this.pageHeader('Transfers','Move inventory between the warehouse and stores — in one workspace, or between separate offline copies by exchanging transfer files.',
-   `<button class="button ghost" data-action="transfer-variance-report">Variance report</button><button class="button ghost" data-action="navigate" data-section-jump="locations">Location inventory</button>${this.sectionAllowed('movements')?'<button class="button ghost" data-action="navigate" data-section-jump="movements">Movement history</button>':''}${canImport?'<button class="button secondary" data-action="import-transfer-file">⇩ Import delivery file</button>':''}${this.can('transfers.request')?'<button class="button secondary" data-action="new-request">＋ Request stock</button>':''}${canCreate?'<button class="button primary" data-action="new-transfer">＋ New transfer</button>':''}`)+
+   `${(()=>{const n=this.outboxItems().length;return `<button class="button ${n?'secondary':'ghost'}" data-action="outbox">Outbox${n?` (${fmt(n)})`:''}</button>`;})()}<button class="button ghost" data-action="transfer-variance-report">Variance report</button><button class="button ghost" data-action="navigate" data-section-jump="locations">Location inventory</button>${this.sectionAllowed('movements')?'<button class="button ghost" data-action="navigate" data-section-jump="movements">Movement history</button>':''}${canImport?'<button class="button secondary" data-action="import-transfer-file">⇩ Import delivery file</button>':''}${canCreate?'<button class="button secondary" data-action="replenish">Replenish stores</button>':''}${this.can('transfers.request')?'<button class="button secondary" data-action="new-request">＋ Request stock</button>':''}${canCreate?'<button class="button primary" data-action="new-transfer">＋ New transfer</button>':''}`)+
    `<div class="notice"><strong>Transfer lifecycle:</strong> <strong>Draft</strong> moves nothing → <strong>Dispatch</strong> removes units from the origin and marks them <strong>In Transit</strong> → <strong>Receive</strong> places the confirmed quantity at the destination. Company total stock does not change unless a short or damaged delivery is recorded as a variance.</div>
    <details class="panel file-guide"${all.length?'':' open'}><summary><strong>Offline store ⇄ warehouse workflow</strong> <span>How transfer files work between separate installations</span></summary><div class="panel-body"><ol class="file-steps">
     <li><strong>Sender dispatches.</strong> Create the transfer, dispatch it, then press <em>Download transfer file</em>. Email or USB the <code>…_SHIPMENT.transfer.json</code> file to the receiving site.</li>
@@ -4516,7 +5001,8 @@ class InventoryApp {
    ${station?'':'<div class="notice warning"><strong>Tip:</strong> set <em>This installation is</em> in Settings so transfer numbers carry your site code and incoming files are checked against this location.</div>'}
    <div class="metric-grid">${this.metric('Open deliveries',fmt(all.filter(t=>this.transferIsOpen(t)).length),'Drafts plus in transit','info')}${this.metric('Units in transit',fmt(inTransitUnits),'Dispatched from here, not yet received','warning')}${this.metric('Incoming to receive',fmt(incoming.length),'Imported delivery files','purple')}${this.metric('Value in transit',money(transitValue,this.state.settings.currency),'At recorded unit cost','healthy')}</div>
    ${todo.length?`<section class="panel"><header class="panel-header"><div><h2>Action needed</h2><p>Deliveries to receive and files to send.</p></div></header><div class="panel-body"><div class="stat-list">${todo.join('')}</div></div></section>`:''}
-   ${canImport?`<div id="transferDropZone" class="drop-zone compact" tabindex="0"><strong>Drop transfer files here</strong><span>Shipment files, stock requests, and receiving confirmations (.transfer.json). Several at once is fine.</span></div>`:''}
+   <div class="header-actions lookup-bar"><label class="field grow" style="margin:0"><span>Scan a delivery note or request barcode, or type its number</span><input id="transferLookup" placeholder="e.g. WH-DR-000123 — press Enter" autocomplete="off"></label></div>
+   ${canImport?`<div id="transferDropZone" class="drop-zone compact" tabindex="0"><strong>Drop transfer files here</strong><span>Shipment files, stock requests, receiving confirmations (.transfer.json), or an outbox ZIP from another site. Several at once is fine.</span></div>`:''}
    <section class="panel"><header class="panel-header"><div><h2>Transfer history and delivery receipts</h2><p>All transfer statuses are shown by default. Use the filter only when you want to narrow the history.</p></div><label class="field header-field"><span>Show</span><select id="transferFilter">${filters.map(f=>`<option ${filter===f?'selected':''}>${f}</option>`).join('')}</select></label></header>
    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>DR number</th><th>Date</th><th>Route</th><th>Type</th><th>Units</th><th>Value</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(t=>{
      const received=this.transferReceivedUnits(t),units=this.transferUnits(t),inbound=t.direction==='inbound';
@@ -4541,13 +5027,13 @@ class InventoryApp {
   const statusBadge=u=>u.active===false?'<span class="badge danger">Disabled</span>':this.accessExpired(u)?`<span class="badge danger">Expired</span><small class="cell-sub">Ended ${esc(u.accessExpiresOn)}</small>`:`<span class="badge healthy">Active</span>${u.accessExpiresOn&&u.role!=='Admin'?`<small class="cell-sub">Until ${esc(u.accessExpiresOn)}</small>`:''}`;
   const note=this.state.settings.permissionUpgradeNote;
   return this.pageHeader('Users and Roles','Give each person exactly the permissions they need with checkboxes. Role presets fill the boxes; individual boxes can then be customised per person.',
-   `${admin?'<button class="button secondary" data-action="add-role">＋ New role preset</button>':''}${manage?'<button class="button primary" data-action="add-user">＋ Add user</button>':''}`)+
+   `${admin&&this.securityEnabled()?'<button class="button ghost" data-action="export-access">⇧ Export access package</button><button class="button ghost" data-action="import-access">⇩ Import access package</button>':''}${admin?'<button class="button secondary" data-action="add-role">＋ New role preset</button>':''}${manage?'<button class="button primary" data-action="add-user">＋ Add user</button>':''}`)+
    `<div class="metric-grid">${this.metric('Users',fmt(this.activeUsers().length),'Active sign-ins','info')}${this.metric('Admins',fmt(this.activeUsers().filter(u=>u.role==='Admin').length),'Full access','purple')}${this.metric('Signed in as',me?me.name:'Not signed in',me?`${me.role} · ${this.permissionSummary(me)}`:'Access control is off','healthy')}${this.metric('Access control',this.securityEnabled()?'On':'Off',this.securityEnabled()?'A PIN is required':'Add a user to switch it on','warning')}</div>
    ${this.securityEnabled()?'':'<div class="notice warning"><strong>Access control is off.</strong> With no users configured, the whole workspace is open. Adding the first user turns on PIN sign-in; that first account is always Admin.</div>'}
    ${note&&admin?`<div class="notice"><strong>v1.6 added finer permissions:</strong> Apply discounts, Request stock, Approve variances, Receive purchase orders, and View audit log. ${esc(note)}, so nobody gained or lost an ability in the upgrade. Untick them per person to tighten access. <button class="button ghost small" data-action="dismiss-permission-note">Got it</button></div>`:''}
    ${legacy.length?`<div class="notice warning"><strong>${fmt(legacy.length)} user${legacy.length===1?' was':'s were'} carried over from v1.4.5 with read-only access</strong> (${esc(legacy.map(u=>u.name).join(', '))}). Nothing was widened automatically. Open each person and choose a preset such as Cashier, Store Manager, or Warehouse Staff to give them POS or transfer rights.</div>`:''}
    <div class="notice"><strong>How permissions work.</strong> Every screen and every saving action checks the specific permission, and anything not ticked is refused. Admin always has every permission and is the only role that can restore a backup or reset the workspace. People with <em>Manage users</em> can only grant permissions they hold themselves and cannot edit Admin accounts. Location access limits selling, counting, adjusting, dispatching, and receiving to the chosen stores. This is accountability on a shared device, not protection against someone with developer-tool access to this computer.</div>
-   <section class="panel"><header class="panel-header"><div><h2>People</h2><p>Role, effective permissions, and which locations each person can work at.</p></div></header>${users.length?`<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Permissions</th><th>Locations</th><th>Status</th><th>Last signed in</th><th></th></tr></thead><tbody>${users.map(u=>`<tr><td><strong>${esc(u.name)}</strong>${u.id===me?.id?'<small class="cell-sub">This is you</small>':''}${u.notes?`<small class="cell-sub">${esc(u.notes)}</small>`:''}</td><td>${roleBadge(u)}</td><td>${esc(this.permissionSummary(u))}</td><td>${esc(locationLabel(u))}</td><td>${statusBadge(u)}</td><td>${u.lastSignInAt?new Date(u.lastSignInAt).toLocaleString():'Never'}</td><td class="row-actions">${manage&&this.canManageUser(u)?`<button class="button ghost small" data-action="edit-user" data-id="${u.id}">Edit</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:this.empty('☺','No users yet','Add your own Admin account first, then add staff. Until then the workspace stays open to everyone.','<button class="button primary" data-action="add-user">Add the first user</button>')}</section>
+   <section class="panel"><header class="panel-header"><div><h2>People</h2><p>Role, effective permissions, and which locations each person can work at.</p></div></header>${users.length?`<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Permissions</th><th>Locations</th><th>Status</th><th>Last signed in</th><th></th></tr></thead><tbody>${users.map(u=>`<tr><td><strong>${esc(u.name)}</strong>${u.id===me?.id?'<small class="cell-sub">This is you</small>':''}${u.notes?`<small class="cell-sub">${esc(u.notes)}</small>`:''}</td><td>${roleBadge(u)}</td><td>${esc(this.permissionSummary(u))}${Object.entries(USER_LIMITS).filter(([k])=>this.userLimit(u,k)!==Infinity).map(([k,d])=>`<small class="cell-sub">${esc(d.label[0].toUpperCase()+d.label.slice(1))}: ${esc(this.limitLabel(k,this.userLimit(u,k)))}</small>`).join('')}</td><td>${esc(locationLabel(u))}</td><td>${statusBadge(u)}</td><td>${u.lastSignInAt?new Date(u.lastSignInAt).toLocaleString():'Never'}</td><td class="row-actions">${manage&&this.canManageUser(u)?`<button class="button ghost small" data-action="edit-user" data-id="${u.id}">Edit</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:this.empty('☺','No users yet','Add your own Admin account first, then add staff. Until then the workspace stays open to everyone.','<button class="button primary" data-action="add-user">Add the first user</button>')}</section>
    <section class="panel"><header class="panel-header"><div><h2>Role presets</h2><p>Built-in presets cannot be changed; duplicate one to make your own. Editing a custom preset updates everyone on it who has not been customised.</p></div>${admin?'<button class="button secondary small" data-action="add-role">＋ New preset</button>':''}</header><div class="table-wrap"><table><thead><tr><th>Preset</th><th>Description</th><th>Permissions</th><th>People</th><th></th></tr></thead><tbody>${presets.map(r=>`<tr><td><strong>${esc(r.name)}</strong><small class="cell-sub">${r.builtIn?'Built-in':'Custom preset'}</small></td><td>${esc(r.description||'')}</td><td>${normalizePermissions(r.permissions).includes('*')?'Every permission':`${fmt(normalizePermissions(r.permissions).length)} of ${fmt(PERMISSION_KEYS.length)}`}</td><td>${fmt(this.state.users.filter(u=>slug(u.role)===slug(r.name)).length)}</td><td class="row-actions">${admin?`<button class="button ghost small" data-action="edit-role" data-id="${esc(r.id)}">${r.builtIn?'View':'Edit'}</button>`:''}</td></tr>`).join('')}</tbody></table></div></section>
    <section class="panel"><header class="panel-header"><div><h2>What each preset can do</h2><p>Individual users may differ from their preset when customised.</p></div></header><div class="table-wrap"><table class="perm-overview"><thead><tr><th>Permission</th>${matrixHead}</tr></thead><tbody>${matrixRows}</tbody></table></div></section>
    ${users.some(u=>u.role!=='Admin')?`<section class="panel"><header class="panel-header"><div><h2>Who can do what</h2><p>Every person's effective permissions. <span class="perm-tick">✓</span> from their preset · <span class="perm-added">＋</span> added for this person · <span class="perm-removed">✕</span> removed from their preset · <span class="perm-dash">—</span> not allowed.</p></div><button class="button ghost small" data-action="export-access-matrix">Export CSV</button></header><div class="table-wrap"><table class="perm-overview perm-people">${this.accessMatrixHTML(users)}</table></div></section>`:''}
@@ -4572,6 +5058,7 @@ class InventoryApp {
   for(const g of PERMISSION_GROUPS)for(const [key,label] of g.perms)rows.push([g.label,label,key,...users.map(u=>words[this.accessMatrixCell(u,key)])]);
   rows.push([],['Locations','','',...users.map(u=>u.role==='Admin'||!(u.locationIds||[]).length?'All locations':u.locationIds.map(id=>this.locationName(id)).join('; '))]);
   rows.push(['Access ends','','',...users.map(u=>u.accessExpiresOn||'')]);
+  for(const [kind,def] of Object.entries(USER_LIMITS))rows.push([def.label[0].toUpperCase()+def.label.slice(1),'','',...users.map(u=>this.limitLabel(kind,this.userLimit(u,kind)))]);
   downloadCSV(rows,`access-matrix-${day()}.csv`);
   this.toast('Access matrix exported.');
  }
@@ -4883,10 +5370,12 @@ class InventoryApp {
     ['5b. Stores and warehouse on separate computers','Give every location the same site code in every installation, add each location’s email address, and set “This installation is” in Settings. After dispatching, press ✉ Email file: on phones, tablets, and recent computers the share sheet attaches the file to a new email; elsewhere the file is downloaded and a pre-addressed email with the delivery summary opens. The receiving site presses Import delivery file, reviews, counts (scanning works), and confirms — its stock updates automatically. It then emails the receiving confirmation back; importing that closes the transfer at the sender and writes off any shortage. Returns work the same way from store to warehouse, with a reason per line. Files are checksum-protected, can be imported only once, and a confirmation can never add stock twice.'],
     ['5c. Stock requests','A store presses Request stock (or Suggest from min/max) and emails the request file to the warehouse. The warehouse imports it and presses Create transfer: the draft is capped at what it actually holds and short lines are reported. The shipment file carries the request number, so the store’s request shows Partially Fulfilled or Fulfilled as soon as the delivery is imported.'],
     ['5d. Receiving safeguards','Blind receiving hides the quantities sent until the count is reviewed. Over-deliveries are accepted as extra units (the sender deducts them from its shelf when the confirmation arrives). Damaged, missing, and extra units need the Approve variances permission. Deliveries in transit too long are flagged Overdue on the dashboard and Transfers screen, and the Variance report lists every discrepancy by route.'],
+    ['5f. Keep stores stocked automatically','Open Stock levels (Locations or the planner) and give each store a minimum and maximum per product — Suggest from sales fills them from the last 30 days. Replenish stores then works out what every store needs, counting stock already on the way and drafts already planned, shares scarce stock in proportion to need, and creates one draft transfer per store for you to review and dispatch. Store requests suggest from the same levels.'],
+    ['5g. Outbox and barcodes','Outbox lists every file this installation still owes each site — dispatched shipments, confirmations, new requests — and sends them as one ZIP per site (download or email). The other site imports the whole ZIP; each file inside is still checked and imported only once. Delivery notes and pick lists carry a Code 128 barcode: scan it into the box on Transfers to jump straight to counting that delivery. Add an expected arrival date to flag late deliveries on the right day.'],
     ['5e. Signed transfer files','Enter the same transfer exchange key in Settings on every installation. Every file is then signed with HMAC-SHA-256, and a file that was edited, forged, or signed by another organisation is refused on import. Tick “Refuse transfer files that are not signed” once every site has the key. The key is never included in spreadsheet or CSV exports.'],
     ['6. Review reorder','Check reasons, then drag cards to Approved to Order.'],
     ['7. Create purchase orders','Group approved cards by supplier and receive actual quantities.'],
-    ['8. Add users and permissions','Give each person a PIN in Users and Roles, choose a preset (Store Manager, Warehouse Staff, Cashier, Viewer, or your own), then tick or untick individual permissions such as POS / Checkout, Process returns, Adjust inventory, Dispatch or Receive transfers, Import delivery files, Request stock, Approve variances, Apply discounts, Receive purchase orders, and View audit log. Use Copy permissions from another person, limit store staff to their own locations, and set an access end date for temporary staff. Anything not ticked is refused — but a colleague who holds the permission can approve one action with their own PIN (for example a discount or return at the till), and both names are recorded in the audit log. Admin alone can restore or reset the workspace. With no users configured the workspace stays open for initial setup.'],
+    ['8. Add users and permissions','Give each person a PIN in Users and Roles, choose a preset (Store Manager, Warehouse Staff, Cashier, Viewer, or your own), then tick or untick individual permissions such as POS / Checkout, Process returns, Adjust inventory, Dispatch or Receive transfers, Import delivery files, Request stock, Approve variances, Apply discounts, Receive purchase orders, and View audit log. Use Copy permissions from another person, limit store staff to their own locations, and set an access end date for temporary staff. Anything not ticked is refused — but a colleague who holds the permission can approve one action with their own PIN (for example a discount or return at the till), and both names are recorded in the audit log. Set per-person limits too — a maximum discount % per sale and a maximum value per dispatched transfer; going over needs a colleague whose limit covers the amount. Head office can export an access package (role presets, people, limits, locations by site code, hashed PINs) and each installation imports it: people are added or updated, never deleted, and your own account is never changed. Admin alone can restore or reset the workspace. With no users configured the workspace stays open for initial setup.'],
     ['9. Back up and export','Download JSON backups and the formatted multi-tab XLSX workbook, including the stock ledger, transfers, POS, and register records.']
    ].map(([h,t])=>`<section class="panel"><div class="panel-body"><h2>${h}</h2><p>${t}</p></div></section>`).join('')}
   </div>
@@ -4928,6 +5417,8 @@ class InventoryApp {
    });
   }
   if(section==='transfers'){
+   const lookup=$('#transferLookup');
+   if(lookup)lookup.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();const code=lookup.value;lookup.value='';this.runAction(null,()=>this.openByDocumentNumber(code));});
    const z=$('#transferDropZone');
    if(z){
     z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag-over');});
@@ -4969,9 +5460,9 @@ class InventoryApp {
    const actions={
     'load-sample':()=>this.loadSample(),'add-product':()=>this.openProduct(),'edit-product':()=>this.openProduct(id),
     'adjust-product':()=>this.openMovement(id),'view-location-stock':()=>{const product=this.productById(id);if(!product)throw new Error('Product could not be found.');const row=this.stockRows(id).find(r=>r.locationId!==TRANSIT_LOCATION_ID&&num(r.qty)!==0);this.state.ui.locationStockId=row?.locationId||product.locationId||this.state.locations[0]?.id||'';this.scheduleSave();this.navigate('locations');},'open-adjustment':()=>this.openMovement(),'open-transfer':()=>this.navigate('transfers'),'start-count':()=>this.openInventoryCount(),
-    'new-transfer':()=>this.openTransfer(),'new-request':()=>this.openStockRequest(),'view-request':()=>this.viewStockRequest(id),'fulfil-request':()=>this.fulfilStockRequest(id),'view-transfer':()=>this.viewTransfer(id),'print-transfer':()=>this.showDeliveryReceipt(id),
-    'add-user':()=>this.openUser(),'export-access-matrix':()=>this.exportAccessMatrix(),'audit-log':()=>this.showAuditLog(),'dismiss-permission-note':async()=>{await this.atomicState(()=>{this.state.settings.permissionUpgradeNote='';},'users.manage');this.navigate('users');},'edit-user':()=>this.openUser(id),'sign-out':()=>this.signOut(),'add-role':()=>this.openRolePreset(),'edit-role':()=>this.openRolePreset(id),
-    'import-transfer-file':()=>this.chooseTransferFiles(),'download-transfer-file':()=>this.downloadTransferFile(id,'shipment'),'download-receipt-file':()=>this.downloadTransferFile(id,'receipt'),'email-transfer-file':()=>this.downloadTransferFile(id,'shipment','email'),'email-receipt-file':()=>this.downloadTransferFile(id,'receipt','email'),'receive-transfer':()=>this.openReceiveTransfer(id),'transfer-file-log':()=>this.showTransferFileLog(),'transfer-variance-report':()=>this.showVarianceReport(),
+    'new-transfer':()=>this.openTransfer(),'new-request':()=>this.openStockRequest(),'replenish':()=>this.openReplenishmentPlanner(),'stock-levels':()=>this.openStockLevels(this.state.ui.locationStockId||''),'view-request':()=>this.viewStockRequest(id),'fulfil-request':()=>this.fulfilStockRequest(id),'view-transfer':()=>this.viewTransfer(id),'print-transfer':()=>this.showDeliveryReceipt(id),
+    'add-user':()=>this.openUser(),'export-access':()=>this.openAccessExport(),'import-access':()=>this.chooseAccessPackage(),'export-access-matrix':()=>this.exportAccessMatrix(),'audit-log':()=>this.showAuditLog(),'dismiss-permission-note':async()=>{await this.atomicState(()=>{this.state.settings.permissionUpgradeNote='';},'users.manage');this.navigate('users');},'edit-user':()=>this.openUser(id),'sign-out':()=>this.signOut(),'add-role':()=>this.openRolePreset(),'edit-role':()=>this.openRolePreset(id),
+    'import-transfer-file':()=>this.chooseTransferFiles(),'download-transfer-file':()=>this.downloadTransferFile(id,'shipment'),'download-receipt-file':()=>this.downloadTransferFile(id,'receipt'),'email-transfer-file':()=>this.downloadTransferFile(id,'shipment','email'),'email-receipt-file':()=>this.downloadTransferFile(id,'receipt','email'),'receive-transfer':()=>this.openReceiveTransfer(id),'transfer-file-log':()=>this.showTransferFileLog(),'transfer-variance-report':()=>this.showVarianceReport(),'outbox':()=>this.showOutbox(),
     'archive-product':()=>this.archiveProduct(id),'restore-product':()=>this.restoreProduct(id),'clear-product-filters':()=>{this.state.ui.productSearch='';this.state.ui.stockFilter='All';this.state.ui.globalSearch='';this.state.ui.productPage=1;this.dom.search.value='';this.navigate('products');}, /* QA fix: also clears the topbar global search, which silently filtered this list. */
     'bulk-edit':()=>this.openBulkEdit(),'filter-status':()=>{this.state.ui.stockFilter=el.dataset.status;this.navigate('products');},
     'navigate':()=>this.navigate(el.dataset.sectionJump),'recalculate-reorder':()=>{this.toast('Reorder metrics recalculated from current inventory and sales history.');this.navigate('reorder');},
@@ -5344,7 +5835,7 @@ class InventoryApp {
  }
  openPosCheckout(){
   this.assertCan('sell','Completing a sale');
-  const totals=this.posTotals();if(!totals.lines.length)throw new Error('Add at least one product to the cart.');if(totals.discount>0)this.assertCan('discount',`Giving a ${money(totals.discount,this.state.settings.currency)} discount`);const session=this.activeCashSession();if(this.state.settings.requireCashSession&&!session)throw new Error('Open the register before checkout.');this.assertLocationAllowed(this.posLocation(),'The selling location');
+  const totals=this.posTotals();if(!totals.lines.length)throw new Error('Add at least one product to the cart.');if(totals.discount>0)this.assertDiscountAllowed(totals);const session=this.activeCashSession();if(this.state.settings.requireCashSession&&!session)throw new Error('Open the register before checkout.');this.assertLocationAllowed(this.posLocation(),'The selling location');
   for(const l of totals.lines)this.assertSellableAt(l.product,l.qty,this.posLocation());
   const methods=['Cash','GCash','Maya','Card','Bank Transfer','Store Credit','Other'];
   this.modal('Complete sale',`<form id="posCheckoutForm"><div class="stat-list"><div class="stat-row"><span>Items</span><strong>${fmt(totals.units)}</strong></div><div class="stat-row"><span>Discounts</span><strong>${money(totals.discount,this.state.settings.currency)}</strong></div><div class="stat-row"><span>Tax</span><strong>${money(totals.tax,this.state.settings.currency)}</strong></div><div class="stat-row"><span>Total due</span><strong>${money(totals.total,this.state.settings.currency)}</strong></div></div><div class="form-grid"><label class="field"><span>Payment method</span><select name="paymentMethod">${methods.map(m=>`<option>${m}</option>`).join('')}</select></label>${this.field('Amount tendered','amountTendered',totals.total,'number',currencyStep(this.state.settings.currency))}${this.field('Customer name (optional)','customerName','')}${this.field('Payment reference / note','paymentReference','')}</div><div id="posChangeNotice" class="notice success">Change: ${money(0,this.state.settings.currency)}</div><div class="notice"><strong>No payment processing.</strong> The selected method and reference are recorded only.</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button primary" id="confirmPosSale">Complete sale</button>`,'Point of Sale');
@@ -5353,7 +5844,7 @@ class InventoryApp {
  }
  async completePosSale(){
   this.assertCan('sell','Completing a sale');
-  const form=$('#posCheckoutForm');if(!form)throw new Error('Checkout form is not open.');const o=this.formObject(form),totals=this.posTotals(),session=this.activeCashSession();if(!totals.lines.length)throw new Error('The cart is empty.');if(totals.discount>0)this.assertCan('discount',`Giving a ${money(totals.discount,this.state.settings.currency)} discount`);const approvedBy=this.approvalStamp();
+  const form=$('#posCheckoutForm');if(!form)throw new Error('Checkout form is not open.');const o=this.formObject(form),totals=this.posTotals(),session=this.activeCashSession();if(!totals.lines.length)throw new Error('The cart is empty.');if(totals.discount>0)this.assertDiscountAllowed(totals);const approvedBy=this.approvalStamp();
   const paymentMethod=o.paymentMethod||'Cash',tendered=roundCurrency(o.amountTendered,this.state.settings.currency);if(paymentMethod==='Cash'&&tendered<totals.total)throw new Error('Cash tendered is less than the total due.');const saleLocationId=this.posLocation();this.assertLocationAllowed(saleLocationId,'The selling location');for(const l of totals.lines){this.assertSellableAt(l.product,l.qty,saleLocationId);this.movementResult(l.product,-l.qty,l.product.quantity);}
   const receiptNumber=this.nextReceiptNumber(),createdAt=iso(),ctx=deviceRegionalContext(),tx={id:uid('tx'),receiptNumber,createdAt,localSaleDateTime:new Date().toLocaleString(),deviceTimeZone:ctx.timeZone,date:day(),sessionId:session?.id||'',locationId:saleLocationId,cashier:this.currentUser()?.name||session?.cashier||this.state.settings.cashierName||'Cashier',userId:this.currentUser()?.id||'',customerName:o.customerName||'',paymentMethod,paymentReference:o.paymentReference||'',amountTendered:paymentMethod==='Cash'?tendered:totals.total,change:paymentMethod==='Cash'?roundCurrency(tendered-totals.total,this.state.settings.currency):0,merchandise:totals.merchandise,discount:totals.discount,tax:totals.tax,total:totals.total,taxMode:totals.taxModes.length===1?totals.taxModes[0]:'mixed',taxJurisdiction:totals.taxJurisdictions.join(' / '),taxProfileSource:totals.taxSources.join(' / '),status:'Completed',approvedBy,items:totals.lines.map(l=>({id:uid('txline'),productId:l.product.id,productName:l.product.productName,sku:l.product.sku,barcode:l.product.barcode||'',qty:l.qty,unitPrice:l.unitPrice,gross:l.gross,lineDiscount:l.lineDiscount,orderDiscount:l.orderDiscount,taxRate:l.taxRate,taxLabel:l.taxLabel,taxSource:l.taxSource,taxMode:l.taxMode,taxJurisdiction:l.taxJurisdiction,taxVerifiedAt:l.taxVerifiedAt,tax:l.tax,total:l.total,returnedQty:0}))};
   await this.atomicState(()=>{for(const item of tx.items){const p=this.productById(item.productId);this.movement(p,-item.qty,'POS Sale',{reason:`Point of sale ${receiptNumber}`,reference:receiptNumber,locationId:tx.locationId,strictLocation:Boolean(tx.locationId)});this.state.sales.push({id:uid('sale'),date:tx.date,createdAt,productId:item.productId,units:item.qty,revenue:item.total,channel:'POS',reference:receiptNumber,transactionId:tx.id,paymentMethod,locationId:tx.locationId,cashier:tx.cashier});}this.state.posTransactions.unshift(tx);this.commitReceiptHighWater(receiptNumber);this.state.ui.posCart=[];this.state.ui.posOrderDiscount=0;this.state.ui.posSearch='';},'sell');
@@ -5839,7 +6330,7 @@ class InventoryApp {
   const map={};rows.forEach(r=>{if(r.Key!==undefined&&r.Key!=='')map[String(r.Key)]=String(r.Value??'');});
   const joined=prefix=>{let text=map[prefix]||'';for(let i=2;map[`${prefix} ${i}`]!==undefined;i++)text+=map[`${prefix} ${i}`];return text;};
   const parseJson=prefix=>{const t=joined(prefix);if(!t)return null;try{return JSON.parse(t);}catch{return null;}};
-  return {application:map['Application']||'',schemaVersion:Number(map['Schema Version'])||0,exportId:map['Export ID']||'',created:map['Created Timestamp']||'',manifest:parseJson('Integrity Manifest JSON'),advisoryHistory:parseJson('Advisory History JSON'),mappingProfiles:parseJson('Mapping Profiles JSON'),posTransactions:parseJson('POS Transactions JSON'),cashSessions:parseJson('Cash Sessions JSON'),cashMovements:parseJson('Cash Movements JSON'),posReturns:parseJson('POS Returns JSON'),stock:parseJson('Stock Ledger JSON'),transfers:parseJson('Transfers JSON'),users:parseJson('Users JSON'),roles:parseJson('Roles JSON'),transferFileLog:parseJson('Transfer File Log JSON'),auditLog:parseJson('Audit Log JSON'),stockRequests:parseJson('Stock Requests JSON')};
+  return {application:map['Application']||'',schemaVersion:Number(map['Schema Version'])||0,exportId:map['Export ID']||'',created:map['Created Timestamp']||'',manifest:parseJson('Integrity Manifest JSON'),advisoryHistory:parseJson('Advisory History JSON'),mappingProfiles:parseJson('Mapping Profiles JSON'),posTransactions:parseJson('POS Transactions JSON'),cashSessions:parseJson('Cash Sessions JSON'),cashMovements:parseJson('Cash Movements JSON'),posReturns:parseJson('POS Returns JSON'),stock:parseJson('Stock Ledger JSON'),transfers:parseJson('Transfers JSON'),users:parseJson('Users JSON'),roles:parseJson('Roles JSON'),transferFileLog:parseJson('Transfer File Log JSON'),auditLog:parseJson('Audit Log JSON'),stockRequests:parseJson('Stock Requests JSON'),parLevels:parseJson('Stock Levels JSON')};
  }
  classifyWorkbook(wb){
   const meta=this.readWorkbookMetadata(wb);
@@ -5922,7 +6413,7 @@ class InventoryApp {
   /* A workbook written before v1.6 has no permission-catalogue marker; say so explicitly so that
      migrate() applies the one-time permission split instead of inheriting today's default. */
   if(!('permissionCatalogVersion' in importedSettings))importedSettings.permissionCatalogVersion=0;
-  const payload={settings:{...blankState().settings,...importedSettings},products,suppliers,locations,purchaseOrders,movements,sales,counts,importHistory,advisoryHistory:Array.isArray(meta?.advisoryHistory)?meta.advisoryHistory:[],mappingProfiles:Array.isArray(meta?.mappingProfiles)?meta.mappingProfiles:[],posTransactions:Array.isArray(meta?.posTransactions)?meta.posTransactions:[],cashSessions:Array.isArray(meta?.cashSessions)?meta.cashSessions:[],cashMovements:Array.isArray(meta?.cashMovements)?meta.cashMovements:[],posReturns:Array.isArray(meta?.posReturns)?meta.posReturns:[],stock:Array.isArray(meta?.stock)?meta.stock:[],transfers:Array.isArray(meta?.transfers)?meta.transfers:[],users:Array.isArray(meta?.users)?meta.users:[],roles:Array.isArray(meta?.roles)?meta.roles:[],transferFileLog:Array.isArray(meta?.transferFileLog)?meta.transferFileLog:[],auditLog:Array.isArray(meta?.auditLog)?meta.auditLog:[],stockRequests:Array.isArray(meta?.stockRequests)?meta.stockRequests:[],legacy};
+  const payload={settings:{...blankState().settings,...importedSettings},products,suppliers,locations,purchaseOrders,movements,sales,counts,importHistory,advisoryHistory:Array.isArray(meta?.advisoryHistory)?meta.advisoryHistory:[],mappingProfiles:Array.isArray(meta?.mappingProfiles)?meta.mappingProfiles:[],posTransactions:Array.isArray(meta?.posTransactions)?meta.posTransactions:[],cashSessions:Array.isArray(meta?.cashSessions)?meta.cashSessions:[],cashMovements:Array.isArray(meta?.cashMovements)?meta.cashMovements:[],posReturns:Array.isArray(meta?.posReturns)?meta.posReturns:[],stock:Array.isArray(meta?.stock)?meta.stock:[],transfers:Array.isArray(meta?.transfers)?meta.transfers:[],users:Array.isArray(meta?.users)?meta.users:[],roles:Array.isArray(meta?.roles)?meta.roles:[],transferFileLog:Array.isArray(meta?.transferFileLog)?meta.transferFileLog:[],auditLog:Array.isArray(meta?.auditLog)?meta.auditLog:[],stockRequests:Array.isArray(meta?.stockRequests)?meta.stockRequests:[],parLevels:Array.isArray(meta?.parLevels)?meta.parLevels:[],legacy};
   if(meta?.manifest)for(const [key,expected] of Object.entries(meta.manifest)){const actual=(payload[key]||[]).length;if(Number(expected)!==actual)throw new Error(`Workbook integrity error: the manifest expects ${expected} ${key} but the worksheets contain ${actual}. The workbook may have been edited or truncated.`);}
   return payload;
  }
@@ -5933,7 +6424,7 @@ class InventoryApp {
   if(this.state.products.length||this.state.movements.length)await this.createBackup(`Automatic backup before workbook restore: ${s.source}`,false);
   const base=this.migrate(clone(this.state)),backups=this.state.backups;
   try{
-   const next=blankState();Object.assign(next,{settings:p.settings,products:p.products,suppliers:p.suppliers,locations:p.locations,purchaseOrders:p.purchaseOrders,movements:p.movements,sales:p.sales,counts:p.counts,posTransactions:p.posTransactions||[],cashSessions:p.cashSessions||[],cashMovements:p.cashMovements||[],posReturns:p.posReturns||[],stock:p.stock||[],transfers:p.transfers||[],users:p.users||[],roles:p.roles||[],transferFileLog:p.transferFileLog||[],auditLog:p.auditLog||[],stockRequests:p.stockRequests||[],importHistory:p.importHistory,advisoryHistory:p.advisoryHistory||[],mappingProfiles:p.mappingProfiles||[],backups});
+   const next=blankState();Object.assign(next,{settings:p.settings,products:p.products,suppliers:p.suppliers,locations:p.locations,purchaseOrders:p.purchaseOrders,movements:p.movements,sales:p.sales,counts:p.counts,posTransactions:p.posTransactions||[],cashSessions:p.cashSessions||[],cashMovements:p.cashMovements||[],posReturns:p.posReturns||[],stock:p.stock||[],transfers:p.transfers||[],users:p.users||[],roles:p.roles||[],transferFileLog:p.transferFileLog||[],auditLog:p.auditLog||[],stockRequests:p.stockRequests||[],parLevels:p.parLevels||[],importHistory:p.importHistory,advisoryHistory:p.advisoryHistory||[],mappingProfiles:p.mappingProfiles||[],backups});
    next.ui.activeImport=null;
    next.importHistory.unshift({id:uid('imp'),date:iso(),source:s.source,dataset:legacy?'Legacy Workspace Workbook (best-effort)':'Complete Workspace Workbook',created:p.products.length,updated:0,rejected:0,verified:true,destination:legacy?'Best-effort restore: relationships rebuilt by name; workflow, review periods, and count details not recoverable':'Operational workspace restore with stable IDs and field-level persistence verification',verification:{schema:legacy?1:(s.meta?.schemaVersion||3),products:p.products.length,suppliers:p.suppliers.length,locations:p.locations.length,purchaseOrders:p.purchaseOrders.length,movements:p.movements.length,sales:p.sales.length,counts:p.counts.length}});
    this.state=this.migrate(next);await this.save();
@@ -6260,7 +6751,7 @@ class InventoryApp {
      migrated into a mostly blank workspace. Newer collections remain backward-compatible. */
   const core=['products','suppliers','locations','movements','sales','purchaseOrders','counts'];
   for(const key of core)if(!Array.isArray(ws[key]))invalid(`${key} is missing or malformed`);
-  const collections=['posTransactions','cashSessions','cashMovements','posReturns','stock','transfers','users','roles','transferFileLog','auditLog','stockRequests','importHistory','mappingProfiles','advisoryHistory','backups'];
+  const collections=['posTransactions','cashSessions','cashMovements','posReturns','stock','transfers','users','roles','transferFileLog','auditLog','stockRequests','parLevels','importHistory','mappingProfiles','advisoryHistory','backups'];
   for(const key of collections)if(Object.prototype.hasOwnProperty.call(ws,key)&&!Array.isArray(ws[key]))invalid(`${key} is malformed`);
   /* stock/transfers/users were introduced together in v1.4. A legitimate older workspace may
      omit all three; a modern backup that contains only some of them is structurally truncated. */
@@ -6538,7 +7029,7 @@ class InventoryApp {
    ['Export ID',uid('exp')],
    ['Created Timestamp',iso()],
    ['Business Name',this.state.settings.businessName],
-   ...jsonChunks('Integrity Manifest JSON',{products:ps.length,suppliers:this.state.suppliers.length,locations:this.state.locations.length,purchaseOrders:this.state.purchaseOrders.length,movements:this.state.movements.length,sales:this.state.sales.length,counts:this.state.counts.length,posTransactions:this.state.posTransactions.length,cashSessions:this.state.cashSessions.length,cashMovements:this.state.cashMovements.length,posReturns:this.state.posReturns.length,stock:this.state.stock.length,transfers:this.state.transfers.length,users:this.state.users.length,roles:this.state.roles.length,transferFileLog:this.state.transferFileLog.length,auditLog:this.state.auditLog.length,stockRequests:this.state.stockRequests.length}),
+   ...jsonChunks('Integrity Manifest JSON',{products:ps.length,suppliers:this.state.suppliers.length,locations:this.state.locations.length,purchaseOrders:this.state.purchaseOrders.length,movements:this.state.movements.length,sales:this.state.sales.length,counts:this.state.counts.length,posTransactions:this.state.posTransactions.length,cashSessions:this.state.cashSessions.length,cashMovements:this.state.cashMovements.length,posReturns:this.state.posReturns.length,stock:this.state.stock.length,transfers:this.state.transfers.length,users:this.state.users.length,roles:this.state.roles.length,transferFileLog:this.state.transferFileLog.length,auditLog:this.state.auditLog.length,stockRequests:this.state.stockRequests.length,parLevels:this.state.parLevels.length}),
    ...jsonChunks('Advisory History JSON',this.state.advisoryHistory),
    ...jsonChunks('Mapping Profiles JSON',this.state.mappingProfiles),
    ...jsonChunks('POS Transactions JSON',this.state.posTransactions),
@@ -6556,7 +7047,9 @@ class InventoryApp {
    ...jsonChunks('Transfer File Log JSON',this.state.transferFileLog),
    ...jsonChunks('Audit Log JSON',this.state.auditLog),
    /* v1.6: store → warehouse stock requests (and their duplicate-import identity). */
-   ...jsonChunks('Stock Requests JSON',this.state.stockRequests)
+   ...jsonChunks('Stock Requests JSON',this.state.stockRequests),
+   /* v1.7: per-location minimum / maximum stock levels. */
+   ...jsonChunks('Stock Levels JSON',this.state.parLevels)
   ];
   const healthyCount=ops.filter(p=>p.status==='Healthy').length;
   const watchCount=ops.filter(p=>p.status==='Watch').length;
@@ -8118,6 +8611,162 @@ class InventoryApp {
    this.showVarianceReport();assert($('#modalTitle').textContent==='Transfer variance report','Variance report did not open');
    this.closeModal();
    return '23 permissions · access matrix · requests · variance report · signing, blind, overdue, and approval settings · expiry and copy-from';
+  });
+  /* ---- v1.7 QA: barcodes, ETA, limits, stock levels, access packages, outbox ---------------- */
+  test('Code 128 barcodes match a reference encoder and print on the delivery note',()=>{
+   const ref='110100100001110100011011000101000100110111001011000100011000101110100110111001001110011011001110010111101001001100011101011';
+   assert(code128Modules('WH-DR-12')===ref,'Code 128 modules differ from the python-barcode reference');
+   assert(CODE128_PATTERNS.length===106&&CODE128_PATTERNS.every(x=>/^[01]{11}$/.test(x)),'Pattern table is malformed');
+   const svg=code128Svg('DR-000001');assert(/<svg class="barcode"/.test(svg)&&(svg.match(/<rect /g)||[]).length>20,'Barcode SVG was not drawn');
+   const t=this.state.transfers[0];if(t)assert(/svg class="barcode"/.test(this.deliveryReceiptHTML(t))&&/svg class="barcode"/.test(this.pickListHTML(t)),'Paperwork lacks the barcode');
+   return 'Set-B modules identical to python-barcode for WH-DR-12 · drawn on delivery notes and pick lists';
+  });
+  test('An expected arrival date drives the overdue flag',()=>{
+   const days=this.state.settings.transitAlertDays;
+   try{
+    this.state.settings.transitAlertDays=3;
+    const base={status:'In Transit',dispatchedAt:new Date(Date.now()-10*86400000).toISOString()};
+    assert(!this.transferOverdue({...base,expectedArrival:day(new Date(Date.now()+86400000))}),'A delivery due tomorrow was overdue');
+    assert(this.transferOverdue({...base,dispatchedAt:iso(),expectedArrival:day(new Date(Date.now()-86400000))}),'A delivery due yesterday was not overdue');
+    assert(!this.transferOverdue({...base,expectedArrival:day()}),'A delivery due today was overdue');
+    return 'Due tomorrow: fine even after 10 days · due yesterday: overdue even if sent today · due today: fine';
+   }finally{this.state.settings.transitAlertDays=days;}
+  });
+  await asyncTest('Scanning a delivery number opens the right screen',async()=>{
+   const home=this.state;
+   try{
+    const ws=this.generateSample();this.state=ws;
+    await this.dispatchTransfer('trf_1',{});
+    const t=this.transferById('trf_1');
+    this.openByDocumentNumber(` ${t.number.toLowerCase()} `);assert($('#receiveTransferForm'),'An in-transit delivery did not open the count screen');this.closeModal();
+    const req=await this.submitStockRequest({id:uid('req'),number:this.nextRequestNumber(),toLocationId:'loc_1',fromLocationId:'loc_2',lines:[{id:'x',productId:t.lines[0].productId,sku:t.lines[0].sku,productName:t.lines[0].productName,qty:1}]});
+    this.openByDocumentNumber(req.number);assert(/Stock request/.test($('#modalTitle').textContent),'A request number did not open the request');this.closeModal();
+    let unknown=false;try{this.openByDocumentNumber('NOPE-123');}catch(e){unknown=/No delivery or stock request/.test(e.message);}
+    assert(unknown,'An unknown number did not explain itself');
+    return `${t.number} → receive screen · ${req.number} → request · unknown number explained`;
+   }finally{this.closeModal();this.state=home;}
+  });
+  await asyncTest('Per-user discount and dispatch limits need a colleague whose limit covers the amount',async()=>{
+   const home=this.state;
+   try{
+    const ws=this.generateSample();this.state=ws;ws.settings.managerApproval=true;
+    const cash=ws.users.find(u=>u.id==='usr_3');cash.maxDiscountPercent=10;
+    const low={id:'qa_lim_low',name:'QA Low Limit',role:'Store Manager',permissions:normalizePermissions(ROLE_PRESETS[1].permissions),active:true,maxDiscountPercent:15};this.setUserPin(low,'5151');
+    const high={id:'qa_lim_high',name:'QA High Limit',role:'Store Manager',permissions:normalizePermissions(ROLE_PRESETS[1].permissions),active:true,maxDiscountPercent:30};this.setUserPin(high,'6161');
+    ws.users.push(low,high);ws.ui.currentUserId='usr_3';
+    const totals={merchandise:100,discount:20};
+    this.assertDiscountAllowed({merchandise:100,discount:8});
+    let err=null;try{this.assertDiscountAllowed(totals);}catch(e){err=e;}
+    assert(err?.limit?.kind==='discount'&&Math.round(err.limit.value)===20,'A 20% discount passed a 10% limit');
+    const names=this.approvalCandidates(err.permission,err.limit).map(u=>u.name);
+    assert(names.includes('QA High Limit')&&!names.includes('QA Low Limit')&&names.includes('Sample Owner'),`Wrong approvers for 20%: ${names.join(', ')}`);
+    const pending=this.withApproval(()=>this.assertDiscountAllowed(totals));
+    await new Promise(r=>setTimeout(r,60));
+    $('#approvalUser').value='qa_lim_high';$('#approvalPin').value='6161';$('#approvalForm').dispatchEvent(new Event('submit',{cancelable:true}));
+    await pending;
+    assert(this.state.auditLog.some(a=>a.action==='Manager approval'&&/up to 20%/.test(a.detail)),'The approved amount was not audited');
+    let over=null;try{this.assertDiscountAllowed({merchandise:100,discount:25});}catch(e){over=e;}
+    assert(over?.limit,'A 20% approval also covered 25%');
+    this.clearElevation();
+    /* Dispatch value limit. */
+    const wh=ws.users.find(u=>u.id==='usr_4');wh.maxDispatchValue=1;ws.ui.currentUserId='usr_4';
+    let d=null;try{await this.dispatchTransfer('trf_1',{});}catch(e){d=e;}
+    assert(d?.limit?.kind==='dispatch'&&this.transferById('trf_1').status==='Draft','A transfer over the dispatch limit was sent');
+    ws.ui.currentUserId='usr_1';await this.dispatchTransfer('trf_1',{});
+    /* A non-Admin user manager cannot hand out a bigger limit than their own. */
+    ws.users.push({id:'qa_um_lim',name:'QA Lim Manager',role:'Custom',permissions:['users.manage','pos.checkout','pos.discount','products.view'],active:true,maxDiscountPercent:5,pinHash:'x',pinSalt:'y'});ws.ui.currentUserId='qa_um_lim';
+    const v=this.validateUserChange({name:'QA New Till',role:'Custom',pin:'1234',permissions:['pos.checkout','pos.discount','products.view'],maxDiscountPercent:'',maxDispatchValue:''});
+    assert(v.errors.some(e=>/above your own/.test(e)),'A 5% manager created someone with no discount limit');
+    const ok=this.validateUserChange({name:'QA New Till',role:'Custom',pin:'1234',permissions:['pos.checkout','pos.discount','products.view'],maxDiscountPercent:5,maxDispatchValue:''});
+    assert(!ok.errors.length&&ok.limits.maxDiscountPercent===5,`A matching limit was refused: ${ok.errors.join(' ')}`);
+    return '8% passes a 10% limit · 20% needs an approver with ≥20% (15% excluded) · approval capped at 20% and audited · dispatch over limit blocked · managers cannot exceed their own limit';
+   }finally{this.clearElevation();this.approvalOpen?.cancel();this.closeModal();this.state=home;}
+  });
+  await asyncTest('Stock levels drive a fair replenishment plan that never double-plans',async()=>{
+   const home=this.state;
+   try{
+    const ws=this.generateSample();this.state=ws;
+    const alloc=this.allocateReplenishment([{locationId:'a',need:6},{locationId:'b',need:4}],5);
+    assert(alloc[0].qty+alloc[1].qty===5&&alloc[0].qty===3&&alloc[1].qty===2,`Scarce stock split ${alloc.map(x=>x.qty).join('/')} instead of 3/2`);
+    assert(this.allocateReplenishment([{locationId:'a',need:6}],50)[0].qty===6,'An ample supply was not filled in full');
+    const p=this.activeProducts().find(x=>this.qtyAt(x.id,'loc_2')>=5&&this.qtyAt(x.id,'loc_1')===0&&this.qtyAt(x.id,'loc_3')===0&&num(x.casePack)<=1&&!this.state.transfers.some(t=>(t.lines||[]).some(l=>l.productId===x.id)));assert(p,'No suitable fixture');
+    const avail=this.qtyAt(p.id,'loc_2')-this.draftedFrom(p.id,'loc_2');
+    let bad=false;try{await this.saveParLevels('loc_1',[{productId:p.id,min:10,max:5}]);}catch(e){bad=/below the minimum/.test(e.message);}
+    assert(bad,'A maximum below the minimum was saved');
+    await this.saveParLevels('loc_1',[{productId:p.id,min:2,max:avail}]);await this.saveParLevels('loc_3',[{productId:p.id,min:1,max:avail}]);
+    const plan=this.replenishmentPlan('loc_2',['loc_1','loc_3']).filter(x=>x.productId===p.id);
+    assert(plan.length===2&&plan.reduce((a,x)=>a+x.qty,0)===avail&&plan.every(x=>x.qty<x.need),'Two stores wanting everything did not share the available stock');
+    const made=await this.createReplenishmentDrafts('loc_2',plan);
+    assert(made.length===2&&made.every(t=>t.status==='Draft'&&t.replenishment),'Drafts were not created per store');
+    assert(!this.replenishmentPlan('loc_2',['loc_1','loc_3']).some(x=>x.productId===p.id&&x.qty>0),'The same need was planned twice');
+    const suggestion=this.suggestRequestLines('loc_1','loc_2').find(x=>x.productId===p.id);
+    assert(!suggestion,'A stock request re-suggested units already drafted for the store');
+    const orphan=clone({...this.state,backups:[]});orphan.parLevels.push({productId:'gone',locationId:'loc_1',min:1,max:2});
+    assert(this.migrate(orphan).parLevels.every(r=>r.productId!=='gone'),'An orphaned level survived migration');
+    return `${fmt(avail)} available shared ${plan.map(x=>x.qty).join('/')} · ${made.map(t=>t.number).join(', ')} drafted · re-plan and request suggestion see the drafts · bad levels refused`;
+   }finally{this.state=home;}
+  });
+  await asyncTest('Access packages copy roles and staff to another installation safely',async()=>{
+   const home=this.state;
+   try{
+    const key='QA access key 2026';
+    const hq=this.generateSample();hq.settings.transferExchangeKey=key;this.state=hq;
+    await this.saveRolePreset('',{name:'QA Supervisor Plus',description:'QA',permissions:['pos.checkout','pos.returns','pos.discount','transfers.receive']});
+    hq.users.push({id:'qa_ap_new',name:'QA Night Clerk',role:'QA Supervisor Plus',permissions:normalizePermissions(['pos.checkout','pos.returns','pos.discount','transfers.receive']),locationIds:['loc_1'],active:true,maxDiscountPercent:12,accessExpiresOn:'2099-12-31'});this.setUserPin(hq.users.at(-1),'7171');
+    hq.users.push({id:'qa_ap_far',name:'QA Far Away',role:'Cashier',permissions:['pos.checkout','pos.discount','products.view'],locationIds:['loc_3'],active:true});this.setUserPin(hq.users.at(-1),'7272');
+    hq.users.find(u=>u.id==='usr_3').permissions=['pos.checkout','products.view'];
+    const text=JSON.stringify(this.buildAccessPackage({includePins:true}));
+    hq.ui.currentUserId='usr_2';let nonAdmin=false;try{this.buildAccessPackage();}catch(e){nonAdmin=/Admins only/.test(e.message);}assert(nonAdmin,'A non-Admin exported the access package');
+    const store=this.generateSample();store.settings.transferExchangeKey=key;this.state=store;
+    store.locations=store.locations.filter(l=>l.id!=='loc_3');store.stock=store.stock.filter(r=>r.locationId!=='loc_3');store.products.forEach(pp=>{if(pp.locationId==='loc_3')pp.locationId='loc_1';});this.state=this.migrate(store,{clearSession:false});
+    const file=this.parseAccessPackage(text,'pkg.json');
+    const tampered=JSON.parse(text);tampered.users.find(u=>u.name==='QA Night Clerk').permissions.push('users.manage');tampered.checksum=this.transferFileChecksum(tampered);
+    let forged=false;try{this.parseAccessPackage(JSON.stringify(tampered));}catch(e){forged=/does not match/.test(e.message);}assert(forged,'A tampered access package was accepted');
+    const plan=this.planAccessImport(file),act=n=>plan.users.find(u=>u.name===n);
+    assert(act('QA Night Clerk').action==='create'&&act('Sample Owner').action==='skip'&&act('QA Far Away').action==='skip'&&act('Sample Cashier').action==='update',`Plan was ${plan.users.map(u=>`${u.name}:${u.action}`).join(', ')}`);
+    await this.commitAccessImport(file,'pkg.json');
+    const clerk=this.state.users.find(u=>u.name==='QA Night Clerk');
+    assert(clerk&&this.verifyPin(clerk,'7171')&&clerk.locationIds.join()==='loc_1'&&clerk.maxDiscountPercent===12&&clerk.accessExpiresOn==='2099-12-31'&&this.state.roles.some(r=>r.name==='QA Supervisor Plus'),'The new person did not arrive intact');
+    assert(this.state.users.find(u=>u.id==='usr_3').permissions.join()==='pos.checkout,products.view','The existing cashier was not updated');
+    assert(!this.state.users.some(u=>u.name==='QA Far Away'),'A person whose only location is missing was imported unrestricted');
+    assert(this.state.users.find(u=>u.id==='usr_1').role==='Admin'&&this.state.auditLog.some(a=>a.action==='Access package imported'),'Admin was changed or the import was not audited');
+    const again=this.planAccessImport(file);assert(again.users.every(u=>u.action!=='create'&&u.action!=='update'),'Re-importing the same package would change things again');
+    return 'New person with PIN, limits, end date, and store scope added · cashier updated · signed-in Admin untouched · unmapped-location person skipped · tampering and non-Admin export refused · re-import is a no-op';
+   }finally{this.state=home;}
+  });
+  await asyncTest('The outbox bundles every due file for a site into one ZIP that imports once',async()=>{
+   const home=this.state;
+   try{
+    const wh=this.generateSample();wh.settings.stationLocationId='loc_2';this.state=wh;this.disableShareSheet=true;
+    const picks=this.activeProducts().filter(x=>this.qtyAt(x.id,'loc_2')>=2).slice(0,2);
+    for(const [i,pp] of picks.entries()){const id=`qa_ob_${i}`;this.state.transfers.unshift({id,globalId:`${this.workspaceId()}:${id}`,direction:'internal',type:'Replenishment',fileEvents:[],number:this.nextTransferNumber(),status:'Draft',createdAt:iso(),date:day(),fromLocationId:'loc_2',toLocationId:'loc_1',lines:[{id:`qa_obl_${i}`,productId:pp.id,sku:pp.sku,productName:pp.productName,qty:1,receivedQty:0,varianceQty:0,unitCost:num(pp.cost)}],preparedBy:'QA'});this.commitTransferHighWater(this.state.transfers[0].number);await this.dispatchTransfer(id,{});}
+    const site=this.outboxSites().find(g=>g.code==='ST01');
+    assert(site&&site.items.filter(i=>i.kind==='shipment').length>=2,'Dispatched shipments are missing from the outbox');
+    const {blob,zipName,built}=await this.buildOutboxZip(site.key);
+    await this.sendOutbox(site.key,'download');
+    assert(!this.outboxSites().some(g=>g.key===site.key)&&this.transferFileSent(this.transferById('qa_ob_0'),'shipment'),'Sent files stayed in the outbox');
+    const store=this.generateSample();store.settings.stationLocationId='loc_1';this.state=store;
+    const zipFile=new File([blob],zipName,{type:'application/zip'});
+    const entries=await this.expandTransferZips([zipFile]);
+    assert(entries.length===built.length,`ZIP held ${entries.length} files instead of ${built.length}`);
+    for(const e of entries)await this.commitShipmentImport(this.parseTransferFile(await e.text(),e.name),{},e.name);
+    const second=await this.expandTransferZips([zipFile]);
+    assert((await Promise.all(second.map(async e=>this.planShipmentImport(this.parseTransferFile(await e.text())).errors.some(x=>/already imported/.test(x))))).every(Boolean),'A file inside a re-sent ZIP could be imported twice');
+    return `${zipName}: ${fmt(built.length)} file(s) for ${site.name} · marked sent · unpacked and imported at the store · re-import blocked per file`;
+   }finally{delete this.disableShareSheet;this.state=home;}
+  });
+  test('New v1.7 controls render',()=>{
+   this.dom.main.innerHTML=this.render_transfers();
+   for(const a of ['outbox','replenish'])assert(this.dom.main.querySelector(`[data-action="${a}"]`),`Transfers is missing ${a}`);
+   assert(this.dom.main.querySelector('#transferLookup'),'Transfers is missing the scan box');
+   this.dom.main.innerHTML=this.render_locations();assert(this.dom.main.querySelector('[data-action="stock-levels"]'),'Locations is missing Stock levels');
+   this.dom.main.innerHTML=this.render_users();assert(this.dom.main.querySelector('[data-action="export-access"]')&&this.dom.main.querySelector('[data-action="import-access"]'),'Users is missing the access package');
+   this.openUser(this.state.users.find(u=>u.role!=='Admin')?.id||'');assert($('#userForm [name="maxDiscountPercent"]')&&$('#userForm [name="maxDispatchValue"]'),'User editor is missing limits');
+   this.openStockLevels('loc_1');assert($('#parForm [data-par-min]'),'Stock levels editor did not render');
+   this.openReplenishmentPlanner();assert($('#replenishForm'),'Replenishment planner did not render');
+   this.showOutbox();assert($('#modalTitle').textContent==='Outbox','Outbox did not open');
+   this.closeModal();
+   return 'Outbox, replenishment, scan box, stock levels, access package, and user limits all present';
   });
   /* QA10 fix (P10): restoring the pre-run workspace can change who is signed in (the suite signs
      itself in; the original state may not have been). The nav was left rendered for the OLD
