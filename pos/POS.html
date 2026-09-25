@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Offline inventory and point-of-sale software with per-location stock, partial stock transfers with printable delivery receipts, offline store-to-warehouse transfer files with signed files, email sharing, stock requests, blind and over-delivery receiving, and receiving confirmations, PIN sign-in with granular checkbox permissions, role presets, manager PIN approval, per-user discount and dispatch limits, temporary access, access packages shared between installations, per-location min/max replenishment, outbox ZIP bundles, printed delivery barcodes, universal ISO currency support, location-aware offline tax profiles, barcode checkout, receipts, returns, purchasing, import, export, and backup.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop stop-color=%27%2311b9ae%27/%3E%3Cstop offset=%27.5%27 stop-color=%27%233977f6%27/%3E%3Cstop offset=%271%27 stop-color=%27%238b5cf6%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2764%27 height=%2764%27 rx=%2718%27 fill=%27url(%23g)%27/%3E%3Cpath d=%27M17 18h30v28H17z%27 fill=%27none%27 stroke=%27white%27 stroke-width=%274%27/%3E%3Cpath d=%27M17 28h30M27 18v28%27 stroke=%27white%27 stroke-width=%274%27/%3E%3C/svg%3E">
-  <title>Inventory Command Center + Offline POS — Multi-Site Transfers & Permissions v1.7.1</title>
+  <title>Inventory Command Center + Offline POS — Multi-Site Transfers & Permissions v1.7.2</title>
   <style>
 :root {
   --bg: #f4f7fb;
@@ -199,6 +199,9 @@ table .product-cell { min-width:210px; }
 /* QA fix: exception-aware purchase-order statuses. */
 .badge.received-with-exceptions { background:var(--amber-soft); color:var(--amber); }
 .badge.exception-open { background:var(--coral-soft); color:var(--coral); }
+/* v1.7.2: POS transaction statuses. */
+.badge.voided { background:var(--coral-soft); color:var(--coral); }
+.badge.partially-returned { background:var(--amber-soft); color:var(--amber); }
 
 .empty-state { padding:42px 20px; text-align:center; color:var(--muted); }
 .empty-icon { width:64px; height:64px; border-radius:20px; display:grid; place-items:center; margin:0 auto 12px; background:var(--primary-soft); font-size:26px; }
@@ -259,6 +262,9 @@ table .product-cell { min-width:210px; }
    highest-stakes dialog in the app. Grid + gap spaces every modal form consistently. */
 .modal-body > form { display:grid; gap:18px; }
 .modal-footer { padding:14px 21px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:9px; background:var(--surface-2); border-radius:0 0 22px 22px; }
+/* v1.7.2: on a phone a row of dialog buttons (the receipt has up to six) pushed the dialog past
+   the screen edge instead of wrapping onto a second line. */
+.modal-footer { flex-wrap: wrap; }
 @keyframes modalIn { from { opacity:0; transform:translateY(10px) scale(.985); } }
 
 .toast-region { position:fixed; right:20px; bottom:20px; z-index:200; display:flex; flex-direction:column; gap:9px; width:min(390px,calc(100vw - 40px)); pointer-events:none; }
@@ -526,6 +532,8 @@ body {
   opacity: .14;
 }
 .page-header > * { position: relative; z-index: 1; }
+/* v1.7.2: a transparent ghost button let the decorative circle show through it. */
+.page-header .header-actions .button.ghost { background: var(--surface); }
 .metric-card {
   border-color: color-mix(in srgb, var(--metric, var(--primary)) 22%, var(--line));
   background:
@@ -611,6 +619,14 @@ table thead th {
 }
 
 
+/* v1.7.2 — till fixes: a barcode that cannot be added (out of stock, reserved, duplicate, unreadable)
+   now shows why instead of failing silently; receipts are found by scanning or typing their number
+   and by searching POS Transactions, so older sales can be reprinted, returned, or voided; same-session
+   sales can be voided with a reason (stock restored, revenue and expected cash reversed, receipt kept
+   and marked VOID); payment methods are a setting; the business tax / registration number prints on
+   receipts; a dashboard reminder when no backup has left this device recently; auto sign-out is
+   switched on when the first user is created, with a notice while it is off.
+*/
 /* v1.7.1 — release QA fixes: escaped location name in the stock-request dialog (XSS via transfer
    files); revision-checked saves so a second tab or window can no longer overwrite sales; locale-aware
    import of "12,000" and text dates, with ambiguous readings listed in the preview; XLSX export no
@@ -673,6 +689,7 @@ table thead th {
 .receipt-line small { display:block; opacity:.72; margin-top:2px; }
 .receipt-total { display:flex; justify-content:space-between; gap:12px; margin:5px 0; font-size:11px; }
 .receipt-total.grand { font-size:15px; font-weight:900; margin-top:9px; }
+.receipt-print .receipt-void { display:inline-block; margin:8px auto 4px; padding:4px 12px; border:2px solid currentColor; font-size:18px; font-weight:900; letter-spacing:.3em; }
 @media (max-width:1250px){ .pos-product-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
 /* QA10 fix (M2, blocker): this breakpoint stacked the two POS columns and, in the same rule,
    removed BOTH things that kept the transaction reachable — the sticky cart and the product
@@ -833,8 +850,8 @@ tr.flash td { background:var(--green-soft); transition:background .2s ease; }
   --ink-purple: color-mix(in srgb, var(--purple) 78%, #000);
   --ink-muted: color-mix(in srgb, var(--muted) 78%, #000);
 }
-:root:not([data-theme="dark"]) :is(.badge.reorder-now, .badge.out-of-stock, .badge.overdue, .badge.cancelled, .badge.exception-open, .badge.danger, .button.danger) { color: var(--ink-coral); }
-:root:not([data-theme="dark"]) :is(.badge.watch, .badge.reorder-soon, .badge.partial, .badge.partially-received, .badge.received-with-exceptions, .badge.warning) { color: var(--ink-amber); }
+:root:not([data-theme="dark"]) :is(.badge.reorder-now, .badge.out-of-stock, .badge.overdue, .badge.cancelled, .badge.exception-open, .badge.voided, .badge.danger, .button.danger) { color: var(--ink-coral); }
+:root:not([data-theme="dark"]) :is(.badge.watch, .badge.reorder-soon, .badge.partial, .badge.partially-received, .badge.partially-returned, .badge.received-with-exceptions, .badge.warning) { color: var(--ink-amber); }
 :root:not([data-theme="dark"]) :is(.badge.healthy, .badge.received, .badge.active, .confidence) { color: var(--ink-green); }
 :root:not([data-theme="dark"]) :is(.badge.ordered, .badge.sent, .badge.approved, .badge.awaiting-approval, .badge.info) { color: var(--ink-blue); }
 :root:not([data-theme="dark"]) :is(.badge.overstocked, .badge.dead-stock, .badge.on-hold, .badge.purple) { color: var(--ink-purple); }
@@ -982,7 +999,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const value = String(cell.value ?? '').trim().toLowerCase();
     if (['healthy','received','verified','paid','active','completed','approved'].includes(value)) return styles.healthy;
     if (['watch','reorder soon','partially received','received with exceptions','awaiting approval','unpaid','warning','on hold'].includes(value)) return styles.warning;
-    if (['out of stock','reorder now','critical','failed','cancelled','overdue','rejected','exception open'].includes(value)) return styles.danger;
+    if (['out of stock','reorder now','critical','failed','cancelled','overdue','rejected','exception open','voided'].includes(value)) return styles.danger;
     if (['overstocked','dead stock','discontinued','inactive','data incomplete'].includes(value)) return styles.purple;
     if (['draft','sent','ordered','open','needs review','approved to order','purchase order drafted'].includes(value)) return styles.info;
     return alternate ? styles.bodyAlt : styles.body;
@@ -1662,7 +1679,7 @@ const DRIVE_AUTOSYNC_DELAY = 60000;
 const PERMISSION_GROUPS = [
  {id:'pos',label:'Point of Sale',perms:[
   ['pos.checkout','POS / Checkout','Open and close the register, ring up sales, record cash in / out'],
-  ['pos.returns','Process returns','Refund items from earlier receipts back into stock'],
+  ['pos.returns','Process returns','Refund items from earlier receipts back into stock, and void sales from the open register'],
   ['pos.discount','Apply discounts','Give line or order discounts at checkout (v1.6)']]},
  {id:'catalog',label:'Products and Inventory',perms:[
   ['products.view','View products','Products, inventory levels, locations, and stock movement history'],
@@ -1769,6 +1786,31 @@ const REQUEST_STATUSES = ['Draft','Sent','Partially Fulfilled','Fulfilled','Canc
 const SECRET_SETTINGS = ['transferExchangeKey'];
 const ACCESS_PACKAGE_FORMAT = 'InventoryCommandCenterAccessPackage';
 const APPROVAL_WINDOW_MS = 180000;
+/* v1.7.2 payment methods are a setting. "Cash" is always present and always spelled exactly so,
+   because the register, change, and cash-refund rules key on it. A workspace saved before this
+   setting existed keeps the list its tills already offered (LEGACY); new workspaces start neutral. */
+const DEFAULT_PAYMENT_METHODS = ['Cash','Card','Bank Transfer','Mobile Wallet','Store Credit','Other'];
+const LEGACY_PAYMENT_METHODS = ['Cash','GCash','Maya','Card','Bank Transfer','Store Credit','Other'];
+const MAX_PAYMENT_METHODS = 20;
+function normalizePaymentMethods(value){
+ let list=value;
+ if(typeof list==='string'){
+  const text=list.trim();
+  if(text.startsWith('[')){try{list=JSON.parse(text);}catch{list=text.split(/[,\n]/);}}
+  else list=text.split(/[,\n]/);
+ }
+ if(!Array.isArray(list))list=[];
+ const out=[],seen=new Set(['cash']);
+ for(const m of list){
+  const name=String(m??'').replace(/\s+/g,' ').trim().slice(0,40),key=name.toLowerCase();
+  if(!name||seen.has(key))continue;
+  seen.add(key);out.push(name);
+ }
+ return ['Cash',...out].slice(0,MAX_PAYMENT_METHODS);
+}
+/* v1.7.2: creating the first user switches access control on; a shared till also needs to sign
+   itself out, so auto sign-out is switched on at the same moment if it was off. */
+const DEFAULT_AUTO_LOCK_MINUTES = 10;
 /* v1.7 per-user limits, set in the user editor next to the permission they qualify. */
 const USER_LIMITS = {
  discount:{permission:'pos.discount',field:'maxDiscountPercent',label:'discount limit',max:100,format:v=>v===Infinity?'no limit':`${Math.round(v*10)/10}%`},
@@ -1801,7 +1843,8 @@ function blankState(){
  return {
   version:1,
   settings:{businessName:'My Business',businessAddress:'',businessCountry:'',businessRegion:'',businessPostalCode:'',deviceTimeZone:'',currency:'USD',theme:'bright',reducedMotion:false,dateFormat:'YYYY-MM-DD',defaultTaxRate:0,taxResolutionMode:'location-first',taxMode:'inclusive',taxProfileUpdatedAt:'',defaultLeadTime:10,reviewPeriod:7,deadStockDays:120,overstockFactor:1.5,allowNegative:false,cashierName:'Cashier',receiptFooter:'Thank you for shopping with us.',requireCashSession:true,transferHighWater:0,transferFooter:'Goods received in good order and condition.',aiProvider:'disabled',googleConfigured:false,driveClientId:'',driveSyncEnabled:false,driveAutoSync:false,driveFileId:'',driveFileName:'inventory-command-center-workspace.json',driveLastSyncAt:'',driveLastSyncRevision:0,driveRevision:0,driveDeviceId:'',workspaceId:'',stationLocationId:'',autoLockMinutes:0,transferFileFooter:'',
-   /* v1.6 */permissionCatalogVersion:PERMISSION_CATALOG_VERSION,permissionUpgradeNote:'',managerApproval:true,transferExchangeKey:'',requireSignedTransfers:false,blindReceiving:false,transitAlertDays:3,requestHighWater:0},
+   /* v1.6 */permissionCatalogVersion:PERMISSION_CATALOG_VERSION,permissionUpgradeNote:'',managerApproval:true,transferExchangeKey:'',requireSignedTransfers:false,blindReceiving:false,transitAlertDays:3,requestHighWater:0,
+   /* v1.7.2 */paymentMethods:[...DEFAULT_PAYMENT_METHODS],businessTaxIdLabel:'Tax ID',businessTaxId:'',backupReminderDays:7,lastBackupExportAt:''},
   products:[],suppliers:[],locations:[],movements:[],sales:[],purchaseOrders:[],counts:[],
   posTransactions:[],cashSessions:[],cashMovements:[],posReturns:[],
   stock:[],transfers:[],users:[],roles:[],transferFileLog:[],auditLog:[],stockRequests:[],parLevels:[],
@@ -1872,6 +1915,12 @@ class InventoryApp {
   if(!out.settings.workspaceId)out.settings.workspaceId=uid('ws');
   if(out.settings.stationLocationId&&!out.locations.some(l=>l.id===out.settings.stationLocationId))out.settings.stationLocationId='';
   out.settings.autoLockMinutes=clamp(Math.floor(num(out.settings.autoLockMinutes)),0,240);
+  /* v1.7.2: the raw input decides whether this workspace predates the payment-method setting. */
+  out.settings.paymentMethods=normalizePaymentMethods(s?.settings?.paymentMethods==null?LEGACY_PAYMENT_METHODS:out.settings.paymentMethods);
+  out.settings.backupReminderDays=clamp(Math.floor(num(out.settings.backupReminderDays)),0,365);
+  out.settings.businessTaxIdLabel=String(out.settings.businessTaxIdLabel??'').trim().slice(0,40)||'Tax ID';
+  out.settings.businessTaxId=String(out.settings.businessTaxId??'').trim().slice(0,80);
+  out.settings.lastBackupExportAt=Number.isFinite(Date.parse(out.settings.lastBackupExportAt||''))?String(out.settings.lastBackupExportAt):'';
   const knownLocations=new Set(out.locations.map(l=>l.id));
   for(const l of out.locations)l.code=normalizeLocationCode(l.code);
   out.roles=out.roles.filter(r=>r&&r.id&&String(r.name||'').trim()).map(r=>({...r,name:String(r.name).trim(),description:String(r.description||''),permissions:normalizePermissions(r.permissions).filter(k=>k!=='*')}));
@@ -2270,6 +2319,8 @@ class InventoryApp {
    try{this.lastFocused.focus({preventScroll:true});}catch{/* element no longer focusable */}
   }
   this.lastFocused=null;
+  /* v1.7.2: a backup downloaded from a dialog clears the dashboard reminder once the dialog closes. */
+  if(this.backupRefreshPending&&!this.modalIsOpen()){this.backupRefreshPending=false;if(['dashboard','backup'].includes(this.state.ui.section)&&(!this.securityEnabled()||this.currentUser()))this.navigate(this.state.ui.section,false);}
  }
  supplierName(id){return this.state.suppliers.find(x=>x.id===id)?.name||'Unassigned';}
  locationName(id){if(id===TRANSIT_LOCATION_ID)return 'In Transit';return this.state.locations.find(x=>x.id===id)?.name||'Unassigned';}
@@ -4477,8 +4528,10 @@ class InventoryApp {
   const v=this.validateUserChange({existing,name:o.name,notes:o.notes,role:o.role??existing?.role,pin:String(o.pin||'').trim(),active:existing?Boolean(o.active)||existing.id===this.state.ui.currentUserId:true,
    permissions:matrix?this.matrixPermissions(matrix):[],locationIds:$$('[name="locationIds"]',form).filter(b=>b.checked).map(b=>b.value),allLocations:Boolean($('#userAllLocations')?.checked),maxDiscountPercent:form.elements.maxDiscountPercent&&!form.elements.maxDiscountPercent.disabled?form.elements.maxDiscountPercent.value:undefined,maxDispatchValue:form.elements.maxDispatchValue&&!form.elements.maxDispatchValue.disabled?form.elements.maxDispatchValue.value:undefined,accessExpiresOn:form.elements.accessExpiresOn&&!form.elements.accessExpiresOn.disabled?form.elements.accessExpiresOn.value:undefined});
   if(v.errors.length){$('#userValidation').innerHTML=`<div class="notice danger">${v.errors.map(esc).join('<br>')}</div>`;return;}
+  const lockWasOff=!num(this.state.settings.autoLockMinutes);
   await this.commitUser(existing,v);
-  this.closeModal();this.toast(existing?'User updated.':`${v.name} added as ${v.role}.`);this.renderNav();this.navigate(this.sectionAllowed('users')?'users':'dashboard');
+  const lockTurnedOn=!existing&&lockWasOff&&num(this.state.settings.autoLockMinutes)>0;if(lockTurnedOn)this.resetIdleTimer();
+  this.closeModal();this.toast(existing?'User updated.':`${v.name} added as ${v.role}.${lockTurnedOn?` Auto sign-out after ${fmt(this.state.settings.autoLockMinutes)} idle minutes is now on for this device; change it in Settings.`:''}`);this.renderNav();this.navigate(this.sectionAllowed('users')?'users':'dashboard');
  }
  async commitUser(existing,v){
   const now=iso();
@@ -4502,7 +4555,7 @@ class InventoryApp {
     this.setUserPin(user,v.pin);this.state.users.push(user);
     /* Creating the first user turns access control on; sign them straight in so nobody is
        locked out of the workspace they were already using. */
-    if(this.state.users.length===1)this.state.ui.currentUserId=user.id;
+    if(this.state.users.length===1){this.state.ui.currentUserId=user.id;if(!num(this.state.settings.autoLockMinutes))this.state.settings.autoLockMinutes=DEFAULT_AUTO_LOCK_MINUTES;}
     this.audit('User created',`${v.name} as ${v.role} · ${this.permissionSummary(user)}${v.locationIds.length?` · limited to ${v.locationIds.map(x=>this.locationName(x)).join(', ')}`:''}${v.accessExpiresOn?` · access ends ${v.accessExpiresOn}`:''}`);
    }
   },'users.manage');
@@ -4919,7 +4972,7 @@ class InventoryApp {
   const top=ps.slice().sort((a,b)=>b.retailValue-a.retailValue).slice(0,6);
   return this.pageHeader('Home Dashboard','Live calculations update whenever inventory, sales, or purchasing data changes.',
    `${this.can('advisory')?'<button class="button secondary" data-action="refresh-advisory">Recalculate insights</button>':''}${this.can('export')?'<button class="button primary" data-action="open-export">Export workspace</button>':''}`)+
-  this.transferAttentionHTML()+
+  this.transferAttentionHTML()+this.backupReminderHTML()+
   `<div class="metric-grid">
    ${this.metric('Products',fmt(m.products),'Active catalog','info')}
    ${this.metric('Units available',fmt(m.units),'On hand minus reserved','healthy')}
@@ -5223,6 +5276,7 @@ class InventoryApp {
   return this.pageHeader('Users and Roles','Give each person exactly the permissions they need with checkboxes. Role presets fill the boxes; individual boxes can then be customised per person.',
    `${admin&&this.securityEnabled()?'<button class="button ghost" data-action="export-access">⇧ Export access package</button><button class="button ghost" data-action="import-access">⇩ Import access package</button>':''}${admin?'<button class="button secondary" data-action="add-role">＋ New role preset</button>':''}${manage?'<button class="button primary" data-action="add-user">＋ Add user</button>':''}`)+
    `<div class="metric-grid">${this.metric('Users',fmt(this.activeUsers().length),'Active sign-ins','info')}${this.metric('Admins',fmt(this.activeUsers().filter(u=>u.role==='Admin').length),'Full access','purple')}${this.metric('Signed in as',me?me.name:'Not signed in',me?`${me.role} · ${this.permissionSummary(me)}`:'Access control is off','healthy')}${this.metric('Access control',this.securityEnabled()?'On':'Off',this.securityEnabled()?'A PIN is required':'Add a user to switch it on','warning')}</div>
+   ${this.securityEnabled()&&!num(this.state.settings.autoLockMinutes)?`<div class="notice warning"><strong>Auto sign-out is off on this device.</strong> On a shared till the last person stays signed in until someone presses Sign out, so the next sale or refund is recorded under their name. ${this.can('settings')?'<button class="button ghost small" data-action="navigate" data-section-jump="settings">Set it in Settings</button>':'Ask an Admin to set it in Settings.'}</div>`:''}
    ${this.securityEnabled()?'':'<div class="notice warning"><strong>Access control is off.</strong> With no users configured, the whole workspace is open. Adding the first user turns on PIN sign-in; that first account is always Admin.</div>'}
    ${note&&admin?`<div class="notice"><strong>v1.6 added finer permissions:</strong> Apply discounts, Request stock, Approve variances, Receive purchase orders, and View audit log. ${esc(note)}, so nobody gained or lost an ability in the upgrade. Untick them per person to tighten access. <button class="button ghost small" data-action="dismiss-permission-note">Got it</button></div>`:''}
    ${legacy.length?`<div class="notice warning"><strong>${fmt(legacy.length)} user${legacy.length===1?' was':'s were'} carried over from v1.4.5 with read-only access</strong> (${esc(legacy.map(u=>u.name).join(', '))}). Nothing was widened automatically. Open each person and choose a preset such as Cashier, Store Manager, or Warehouse Staff to give them POS or transfer rights.</div>`:''}
@@ -5386,11 +5440,38 @@ class InventoryApp {
    `<div class="notice"><strong>Transparent analysis.</strong> Each recommendation shows the supporting figures and confidence. External AI is not required for core calculations.</div>
    <div class="advisory-list">${a.length?a.map(x=>`<article class="advisory-card ${x.severity}"><div class="advisory-icon">✦</div><div><div class="header-actions"><span class="badge ${x.severity==='critical'?'danger':x.severity==='high'?'warning':'info'}">${esc(x.severity)}</span><span class="confidence">${Math.round(x.confidence*100)}% confidence</span></div><h3>${esc(x.title)}</h3><p>${esc(x.explanation)}</p><div class="advisory-evidence">${x.evidence.map(e=>`<span class="evidence-pill">${esc(e)}</span>`).join('')}</div><p><strong>Suggested action:</strong> ${esc(x.action)}</p><p><strong>Estimated financial impact:</strong> ${money(x.impact,this.state.settings.currency)} · <strong>Action date:</strong> ${esc(x.deadline)}</p><div class="header-actions"><button class="button primary small" data-action="open-advisory-record" data-key="${esc(x.key)}">Open product</button><button class="button ghost small" data-action="snooze-advisory" data-key="${esc(x.key)}">Snooze 7 days</button><button class="button ghost small" data-action="complete-advisory" data-key="${esc(x.key)}">Mark completed</button><button class="link-button" data-action="dismiss-advisory" data-key="${esc(x.key)}">Dismiss</button></div></div></article>`).join(''):this.empty('✦','No active recommendations','No current rules are generating actionable inventory recommendations.')}</div>`;
  }
+ /* v1.7.2: the browser database is the only copy until a backup leaves this device. A downloaded
+    JSON backup, a downloaded XLSX workbook (which restores exactly), or a Drive upload counts. */
+ lastOffDeviceBackupAt(){
+  const s=this.state.settings,times=[s.lastBackupExportAt,s.driveLastSyncAt].map(v=>Date.parse(v||'')).filter(Number.isFinite);
+  return times.length?new Date(Math.max(...times)).toISOString():'';
+ }
+ backupReminder(now=Date.now()){
+  const days=clamp(Math.floor(num(this.state.settings.backupReminderDays)),0,365),last=this.lastOffDeviceBackupAt();
+  const hasData=this.state.products.length>0||this.state.sales.length>0||this.state.posTransactions.length>0;
+  const age=last?Math.max(0,Math.floor((now-Date.parse(last))/86400000)):null;
+  return {due:days>0&&hasData&&(age===null||age>=days),last,age,days};
+ }
+ backupReminderHTML({always=false}={}){
+  /* The dashboard reminder is for people who can act on it; the Backup screen always explains. */
+  if(!always&&!this.can('backup.create')&&!this.can('export'))return '';
+  const r=this.backupReminder();
+  if(!r.due)return always?`<div class="notice"><strong>Last backup saved off this device:</strong> ${r.last?esc(new Date(r.last).toLocaleString()):'none yet'}.${r.days?` A reminder appears on the dashboard after ${fmt(r.days)} day${r.days===1?'':'s'} without one.`:' The dashboard reminder is off in Settings.'}</div>`:'';
+  const when=r.last?`The last backup saved off this device was ${r.age===0?'today':`${fmt(r.age)} day${r.age===1?'':'s'} ago`}.`:'This workspace has never been backed up off this device.';
+  const action=this.can('backup.create')?'<button class="button primary small" data-action="create-backup">Download backup now</button>':'<button class="button secondary small" data-action="export-json">Download JSON backup</button>';
+  return `<div class="notice warning"><strong>${when}</strong> Everything is stored only in this browser, so clearing browser data, a reset, or a lost or broken computer would lose it. ${action}</div>`;
+ }
+ noteOffDeviceBackup(at=iso()){
+  this.state.settings.lastBackupExportAt=at;this.scheduleSave();
+  if(this.modalIsOpen())this.backupRefreshPending=true;/* re-rendered when the Export dialog closes */
+  else if(['dashboard','backup'].includes(this.state.ui.section))this.navigate(this.state.ui.section);
+ }
  render_backup(){
   const bs=this.state.backups.slice().reverse().slice(0,12),canRestore=this.can('workspace.reset'),canBackup=this.can('backup.create');
   const backupActions=`${canRestore?'<button class="button secondary" data-action="restore-file">Restore from file</button>':''}${canBackup?'<button class="button primary" data-action="create-backup">Create full backup</button>':''}`;
   return this.pageHeader('Backup and Restore','Create portable JSON backups and preview restores before replacing local data.',backupActions)+
    `<div class="metric-grid">${this.metric('Local backup points',fmt(this.state.backups.length),'Stored inside this browser','info')}${this.metric('Products',fmt(this.state.products.length),'Included in every backup','healthy')}${this.metric('Movements',fmt(this.state.movements.length),'Audit history included','purple')}${this.metric('Last saved',this.state.ui.lastSaved?new Date(this.state.ui.lastSaved).toLocaleString():'Not yet saved','IndexedDB persistence','warning')}</div>
+   ${this.backupReminderHTML({always:true})}
    ${this.renderCloudPanel()}
    <section class="panel"><header class="panel-header"><div><h2>Recovery points</h2><p>Automatic backups are created before imports and bulk destructive changes.</p></div></header>${bs.length?`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Reason</th><th>Products</th><th>Movements</th><th></th></tr></thead><tbody>${bs.map(b=>`<tr><td>${new Date(b.date).toLocaleString()}</td><td>${esc(b.reason)}</td><td>${fmt(b.summary.products)}</td><td>${fmt(b.summary.movements)}</td><td>${canRestore?`<button class="button ghost small" data-action="restore-backup" data-id="${esc(b.id)}">Preview restore</button>`:'<span class="cell-sub">Admin restore only</span>'}</td></tr>`).join('')}</tbody></table></div>`:this.empty('⟲','No local recovery points','Create a backup before major changes.')}</section>`;
  }
@@ -5512,6 +5593,8 @@ class InventoryApp {
   `<form id="settingsForm" class="panel"><div class="panel-body"><div class="form-grid">
    ${this.field('Business name','businessName',s.businessName)}
    ${this.field('Business address / receipt heading','businessAddress',s.businessAddress||'')}
+   ${this.field('Tax number label on receipts','businessTaxIdLabel',s.businessTaxIdLabel||'Tax ID')}
+   ${this.field('Business tax / registration number (printed on receipts)','businessTaxId',s.businessTaxId||'')}
    ${this.field('Business country code','businessCountry',s.businessCountry||'')}
    ${this.field('State / province / region','businessRegion',s.businessRegion||'')}
    ${this.field('Postal / ZIP code','businessPostalCode',s.businessPostalCode||'')}
@@ -5523,13 +5606,14 @@ class InventoryApp {
    ${this.field('Default review period (days)','reviewPeriod',s.reviewPeriod,'number')}
    ${this.field('Dead-stock period (days)','deadStockDays',s.deadStockDays,'number')}
    ${this.field('Overstock multiplier','overstockFactor',s.overstockFactor,'number','0.1')}
+   ${this.field('Backup reminder after (days, 0 = off)','backupReminderDays',s.backupReminderDays??7,'number','1')}
    <label class="field"><span>Theme</span><select name="theme"><option value="bright" ${s.theme==='bright'?'selected':''}>Bright Professional</option><option value="calm" ${s.theme==='calm'?'selected':''}>Calm Neutral</option><option value="dark" ${s.theme==='dark'?'selected':''}>Dark Mode</option></select></label>
    <label class="field checkbox"><input name="reducedMotion" type="checkbox" ${s.reducedMotion?'checked':''}><span>Reduced motion</span></label>
    <label class="field checkbox"><input name="allowNegative" type="checkbox" ${s.allowNegative?'checked':''}><span>Allow negative inventory (risk acknowledged)</span></label>
   </div><hr>
   <div class="notice success"><strong>Universal currency mode:</strong> all prices, receipts, cash reconciliation, reports, and XLSX currency formats use the selected ISO code. Because the app is fully offline, it does not fetch exchange rates or convert existing amounts when the code changes.</div><hr>
   <h2>Offline tax jurisdiction</h2><div class="form-grid"><label class="field"><span>Tax rate priority</span><select name="taxResolutionMode"><option value="location-first" ${s.taxResolutionMode!=='product-only'?'selected':''}>Location profile first, then product rate</option><option value="product-only" ${s.taxResolutionMode==='product-only'?'selected':''}>Product rate first</option></select></label><div class="field"><span>Device regional suggestion</span><button type="button" class="button secondary" data-action="detect-device-region">Use device locale and time zone</button><small class="field-hint">${esc(deviceRegionalContext().locale)} · ${esc(deviceRegionalContext().timeZone||'Unknown time zone')} · ${esc(deviceRegionalContext().localDateTime)}</small></div></div><div class="notice warning"><strong>Tax safety:</strong> device locale, time zone, and date can suggest a country and timestamp, but cannot determine a legally correct tax rate. Configure and verify the tax profile on each store location. Product rates remain the fallback.</div><hr>
-  <h2>Point of Sale defaults</h2><div class="form-grid"><label class="field"><span>Default tax handling</span><select name="taxMode"><option value="inclusive" ${s.taxMode==='inclusive'?'selected':''}>Tax included in selling price</option><option value="exclusive" ${s.taxMode==='exclusive'?'selected':''}>Add tax at checkout</option></select></label>${this.field('Default cashier name','cashierName',s.cashierName||'Cashier')}${this.field('Receipt footer','receiptFooter',s.receiptFooter||'Thank you for shopping with us.')}${this.field('Delivery receipt footer','transferFooter',s.transferFooter||'Goods received in good order and condition.')}<label class="field checkbox"><input name="requireCashSession" type="checkbox" ${s.requireCashSession?'checked':''}><span>Require an open register session for checkout</span></label></div><div class="notice"><strong>Payment processing is not included.</strong> Cash, GCash, Maya, card, bank transfer, store credit, and custom methods are recorded for reconciliation only.</div><hr>
+  <h2>Point of Sale defaults</h2><div class="form-grid"><label class="field"><span>Default tax handling</span><select name="taxMode"><option value="inclusive" ${s.taxMode==='inclusive'?'selected':''}>Tax included in selling price</option><option value="exclusive" ${s.taxMode==='exclusive'?'selected':''}>Add tax at checkout</option></select></label>${this.field('Default cashier name','cashierName',s.cashierName||'Cashier')}${this.field('Receipt footer','receiptFooter',s.receiptFooter||'Thank you for shopping with us.')}${this.field('Delivery receipt footer','transferFooter',s.transferFooter||'Goods received in good order and condition.')}<label class="field"><span>Payment methods</span><input name="paymentMethods" type="text" value="${esc(normalizePaymentMethods(s.paymentMethods).join(', '))}" autocomplete="off"><small class="field-hint">Comma-separated, in the order the till lists them. Cash is always included because the register counts it.</small></label><label class="field checkbox"><input name="requireCashSession" type="checkbox" ${s.requireCashSession?'checked':''}><span>Require an open register session for checkout</span></label></div><div class="notice"><strong>Payment processing is not included.</strong> The payment methods above are recorded for reconciliation only.</div><hr>
   <h2>Multi-site operation</h2><div class="form-grid"><label class="field"><span>This installation is</span><select name="stationLocationId"><option value="">Not set (head office / single site)</option>${this.state.locations.map(l=>`<option value="${esc(l.id)}" ${s.stationLocationId===l.id?'selected':''}>${esc(l.name)}${l.code?` · ${esc(l.code)}`:' · no site code'}</option>`).join('')}</select><small class="field-hint">The warehouse or store this computer works at. It becomes the default register and transfer location, prefixes delivery numbers with its site code, and is checked when delivery files are imported.</small></label>${this.field('Auto sign-out after idle minutes (0 = off)','autoLockMinutes',s.autoLockMinutes||0,'number','1')}<div class="field"><span>Workspace ID</span><code class="code" style="padding:9px 10px">${esc(this.workspaceId())}</code><small class="field-hint">Stamped on every transfer file this workspace creates.</small></div></div><div class="notice"><strong>Running the warehouse and stores offline:</strong> install this file on each site's computer, add the same locations with the same <strong>site codes</strong> (for example WH, ST01 … ST08) everywhere, choose <em>This installation is</em> on each computer, then move stock with transfer files from the Transfers screen.</div><hr>
   <h2>Transfer files, receiving, and approvals</h2><div class="form-grid">
    <label class="field"><span>Transfer exchange key ${s.transferExchangeKey?`<small>(set · fingerprint ${esc(this.exchangeKeyId())})</small>`:'<small>(not set)</small>'}</span><input name="transferExchangeKeyInput" type="password" autocomplete="new-password" placeholder="${s.transferExchangeKey?'Leave blank to keep the current key':'At least 12 characters, identical at every site'}"><small class="field-hint">A shared secret typed into every installation. Files are then signed with HMAC-SHA-256 and a forged or edited file is refused. It is never included in spreadsheet or CSV exports.</small></label>
@@ -5558,7 +5642,7 @@ class InventoryApp {
    ${[
     ['1. Set up','Add business settings, locations, suppliers, and a verified Tax Profile for each selling location.'],
     ['2. Add or bulk import','Create products manually, download the CSV template, or bulk import many rows through the verified mapping preview.'],
-    ['3. Run the POS','Open a register, scan products by barcode or SKU, pull the stored price, apply the verified location tax profile with product/default fallback, print receipts, and process returns.'],
+    ['3. Run the POS','Open a register, scan products by barcode or SKU, pull the stored price, apply the verified location tax profile with product/default fallback, print receipts, and process returns. Scan or type a receipt number (or search POS Transactions) to reprint, return, or void an earlier sale; a sale can be voided only while its register is still open.'],
     ['4. Record movements','Receive, sell, use, damage, or adjust stock. Every movement records who made it.'],
     ['5. Move stock between locations','Open Transfers and create a delivery. Send any quantity — not the whole SKU. Dispatch moves the units into an In Transit bucket, and the destination confirms what actually arrived. Print the delivery receipt for the driver and the receiving site.'],
     ['5b. Stores and warehouse on separate computers','Give every location the same site code in every installation, add each location’s email address, and set “This installation is” in Settings. After dispatching, press ✉ Email file: on phones, tablets, and recent computers the share sheet attaches the file to a new email; elsewhere the file is downloaded and a pre-addressed email with the delivery summary opens. The receiving site presses Import delivery file, reviews, counts (scanning works), and confirms — its stock updates automatically. It then emails the receiving confirmation back; importing that closes the transfer at the sender and writes off any shortage. Returns work the same way from store to warehouse, with a reason per line. Files are checksum-protected, can be imported only once, and a confirmation can never add stock twice.'],
@@ -5570,7 +5654,7 @@ class InventoryApp {
     ['6. Review reorder','Check reasons, then drag cards to Approved to Order.'],
     ['7. Create purchase orders','Group approved cards by supplier and receive actual quantities.'],
     ['8. Add users and permissions','Give each person a PIN in Users and Roles, choose a preset (Store Manager, Warehouse Staff, Cashier, Viewer, or your own), then tick or untick individual permissions such as POS / Checkout, Process returns, Adjust inventory, Dispatch or Receive transfers, Import delivery files, Request stock, Approve variances, Apply discounts, Receive purchase orders, and View audit log. Use Copy permissions from another person, limit store staff to their own locations, and set an access end date for temporary staff. Anything not ticked is refused — but a colleague who holds the permission can approve one action with their own PIN (for example a discount or return at the till), and both names are recorded in the audit log. Set per-person limits too — a maximum discount % per sale and a maximum value per dispatched transfer; going over needs a colleague whose limit covers the amount. Head office can export an access package (role presets, people, limits, locations by site code, hashed PINs) and each installation imports it: people are added or updated, never deleted, and your own account is never changed. Admin alone can restore or reset the workspace. With no users configured the workspace stays open for initial setup.'],
-    ['9. Back up and export','Download JSON backups and the formatted multi-tab XLSX workbook, including the stock ledger, transfers, POS, and register records.']
+    ['9. Back up and export','Download JSON backups and the formatted multi-tab XLSX workbook, including the stock ledger, transfers, POS, and register records. The dashboard reminds you when no backup has left this device for the number of days set in Settings.']
    ].map(([h,t])=>`<section class="panel"><div class="panel-body"><h2>${h}</h2><p>${t}</p></div></section>`).join('')}
   </div>
   <section class="panel"><header class="panel-header"><div><h2>Calculation reference</h2><p>Core inventory formulas</p></div></header><div class="panel-body"><p><code>Available = On hand − Reserved</code></p><p><code>Projected = Available + Incoming</code></p><p><code>Recommended reorder point = Average daily usage × Lead time + Safety stock</code></p><p><code>Suggested quantity = Target stock − Projected stock</code>, rounded up to MOQ and case pack.</p><div class="notice warning"><strong>Important:</strong> recommendations are estimates. Products with incomplete data are explicitly classified as Data Incomplete rather than Healthy.</div></div></section>`;
@@ -5580,7 +5664,9 @@ class InventoryApp {
    const search=$('#posSearch');
    if(search){
     search.addEventListener('input',e=>{this.state.ui.posSearch=e.target.value;this.scheduleSave();});
-    search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();this.posScanOrSearch(e.target.value);}});
+    /* v1.7.2: a refused scan (out of stock, reserved, duplicate barcode, unreadable code) threw out of
+       this listener, so the cashier saw nothing at all. It now goes through runAction like a click. */
+    search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const code=e.target.value;this.runAction(null,()=>this.posScanOrSearch(code));}});
     search.focus();
    }
    const location=$('#posLocation');if(location)location.addEventListener('change',e=>{this.state.ui.posLocationId=e.target.value;this.scheduleSave();this.navigate('pos');});
@@ -5674,7 +5760,7 @@ class InventoryApp {
     'refresh-advisory':()=>{this.toast('Recommendations recalculated.');this.navigate('advisory');},
     'open-advisory-record':()=>this.openAdvisoryRecord(el.dataset.key),'snooze-advisory':()=>this.setAdvisory(el.dataset.key,'snoozed'),
     'complete-advisory':()=>this.setAdvisory(el.dataset.key,'completed'),'dismiss-advisory':()=>this.setAdvisory(el.dataset.key,'dismissed'),
-    'advisory-history':()=>this.showAdvisoryHistory(),'create-backup':()=>this.createBackup('Manual backup',true),
+    'advisory-history':()=>this.showAdvisoryHistory(),'create-backup':async()=>{await this.createBackup('Manual backup',true);if(!this.modalIsOpen()&&['dashboard','backup'].includes(this.state.ui.section))this.navigate(this.state.ui.section);},
     'restore-file':()=>this.chooseRestoreFile(),'restore-backup':()=>this.previewRestore(id),'save-settings':()=>this.saveSettings(),'detect-device-region':()=>this.applyDeviceContextToSettings(),
     'drive-check':()=>this.driveCheckConnection(),
     /* A newer copy in Drive is not an error to swallow — it becomes an explicit overwrite choice. */
@@ -6009,8 +6095,19 @@ class InventoryApp {
   const matches=this.operationalEnriched().filter(p=>(slug(p.barcode)===key||slug(p.sku)===key)&&(!loc||this.stocksAt(p.id,loc)));
   if(matches.length>1)throw new Error(`Barcode or SKU ${raw} matches multiple active products at this location. Resolve the duplicate before checkout.`);
   if(matches.length===1){this.state.ui.posSearch='';this.posAdd(matches[0].id);this.toast(`${matches[0].productName} added · ${money(matches[0].price,this.state.settings.currency)}`,'success');return;}
+  /* v1.7.2: a scanned or typed receipt number opens that receipt, from which it can be reprinted,
+     returned, or voided — however old it is. */
+  const receipt=this.findReceipt(raw);
+  if(receipt){this.state.ui.posSearch='';this.navigate('pos');this.showReceipt(receipt.id);return;}
   this.state.ui.posSearch=raw;this.navigate('pos');
   if(raw.length>=4)this.toast(`No active product found for barcode or SKU ${raw}. Add it to inventory or verify the selected location.`,'warning');
+ }
+ findReceipt(code){const k=String(code||'').trim().toUpperCase();if(!k)return null;return this.state.posTransactions.find(t=>String(t.receiptNumber||'').trim().toUpperCase()===k)||null;}
+ paymentMethodOptions(include=''){
+  const list=normalizePaymentMethods(this.state.settings.paymentMethods),extra=String(include||'').trim();
+  /* A refund may go back by a method that has since been removed from the list. */
+  if(extra&&!list.some(m=>m.toLowerCase()===extra.toLowerCase()))list.push(extra);
+  return list;
  }
  posAdd(id){
   const p=this.calcProduct(this.productById(id));if(!p||!this.isOperational(p))throw new Error('This product is not available for checkout.');
@@ -6047,8 +6144,8 @@ class InventoryApp {
   this.assertCan('sell','Completing a sale');
   const totals=this.posTotals();if(!totals.lines.length)throw new Error('Add at least one product to the cart.');if(totals.discount>0)this.assertDiscountAllowed(totals);const session=this.activeCashSession();if(this.state.settings.requireCashSession&&!session)throw new Error('Open the register before checkout.');this.assertLocationAllowed(this.posLocation(),'The selling location');
   for(const l of totals.lines)this.assertSellableAt(l.product,l.qty,this.posLocation());
-  const methods=['Cash','GCash','Maya','Card','Bank Transfer','Store Credit','Other'];
-  this.modal('Complete sale',`<form id="posCheckoutForm"><div class="stat-list"><div class="stat-row"><span>Items</span><strong>${fmt(totals.units)}</strong></div><div class="stat-row"><span>Discounts</span><strong>${money(totals.discount,this.state.settings.currency)}</strong></div><div class="stat-row"><span>Tax</span><strong>${money(totals.tax,this.state.settings.currency)}</strong></div><div class="stat-row"><span>Total due</span><strong>${money(totals.total,this.state.settings.currency)}</strong></div></div><div class="form-grid"><label class="field"><span>Payment method</span><select name="paymentMethod">${methods.map(m=>`<option>${m}</option>`).join('')}</select></label>${this.field('Amount tendered','amountTendered',totals.total,'number',currencyStep(this.state.settings.currency))}${this.field('Customer name (optional)','customerName','')}${this.field('Payment reference / note','paymentReference','')}</div><div id="posChangeNotice" class="notice success">Change: ${money(0,this.state.settings.currency)}</div>${this.taxFallbackNoticeHTML(totals)}<div class="notice"><strong>No payment processing.</strong> The selected method and reference are recorded only.</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button primary" id="confirmPosSale">Complete sale</button>`,'Point of Sale');
+  const methods=this.paymentMethodOptions();
+  this.modal('Complete sale',`<form id="posCheckoutForm"><div class="stat-list"><div class="stat-row"><span>Items</span><strong>${fmt(totals.units)}</strong></div><div class="stat-row"><span>Discounts</span><strong>${money(totals.discount,this.state.settings.currency)}</strong></div><div class="stat-row"><span>Tax</span><strong>${money(totals.tax,this.state.settings.currency)}</strong></div><div class="stat-row"><span>Total due</span><strong>${money(totals.total,this.state.settings.currency)}</strong></div></div><div class="form-grid"><label class="field"><span>Payment method</span><select name="paymentMethod">${methods.map(m=>`<option>${esc(m)}</option>`).join('')}</select></label>${this.field('Amount tendered','amountTendered',totals.total,'number',currencyStep(this.state.settings.currency))}${this.field('Customer name (optional)','customerName','')}${this.field('Payment reference / note','paymentReference','')}</div><div id="posChangeNotice" class="notice success">Change: ${money(0,this.state.settings.currency)}</div>${this.taxFallbackNoticeHTML(totals)}<div class="notice"><strong>No payment processing.</strong> The selected method and reference are recorded only.</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button primary" id="confirmPosSale">Complete sale</button>`,'Point of Sale');
   $('[data-modal-cancel]').onclick=()=>this.closeModal();const form=$('#posCheckoutForm'),method=form.elements.paymentMethod,tender=form.elements.amountTendered,notice=$('#posChangeNotice');const update=()=>{const cash=method.value==='Cash';tender.disabled=!cash;if(!cash)tender.value=totals.total;const change=cash?Math.max(0,roundCurrency(num(tender.value)-totals.total,this.state.settings.currency)):0;notice.textContent=`Change: ${money(change,this.state.settings.currency)}`;notice.className=`notice ${cash&&num(tender.value)<totals.total?'error':'success'}`;};method.onchange=update;tender.oninput=update;update();
   const button=$('#confirmPosSale');button.onclick=()=>this.runAction(button,()=>this.completePosSale());
  }
@@ -6067,17 +6164,64 @@ class InventoryApp {
  async completePosSale(){
   this.assertCan('sell','Completing a sale');
   const form=$('#posCheckoutForm');if(!form)throw new Error('Checkout form is not open.');const o=this.formObject(form),totals=this.posTotals(),session=this.activeCashSession();if(!totals.lines.length)throw new Error('The cart is empty.');if(totals.discount>0)this.assertDiscountAllowed(totals);const approvedBy=this.approvalStamp();
-  const paymentMethod=o.paymentMethod||'Cash',tendered=roundCurrency(o.amountTendered,this.state.settings.currency);if(paymentMethod==='Cash'&&tendered<totals.total)throw new Error('Cash tendered is less than the total due.');const saleLocationId=this.posLocation();this.assertLocationAllowed(saleLocationId,'The selling location');for(const l of totals.lines){this.assertSellableAt(l.product,l.qty,saleLocationId);this.movementResult(l.product,-l.qty,l.product.quantity);}
-  const receiptNumber=this.nextReceiptNumber(),createdAt=iso(),ctx=deviceRegionalContext(),tx={id:uid('tx'),receiptNumber,createdAt,localSaleDateTime:new Date().toLocaleString(),deviceTimeZone:ctx.timeZone,date:day(),sessionId:session?.id||'',locationId:saleLocationId,cashier:this.currentUser()?.name||session?.cashier||this.state.settings.cashierName||'Cashier',userId:this.currentUser()?.id||'',customerName:o.customerName||'',paymentMethod,paymentReference:o.paymentReference||'',amountTendered:paymentMethod==='Cash'?tendered:totals.total,change:paymentMethod==='Cash'?roundCurrency(tendered-totals.total,this.state.settings.currency):0,merchandise:totals.merchandise,discount:totals.discount,tax:totals.tax,total:totals.total,taxMode:totals.taxModes.length===1?totals.taxModes[0]:'mixed',taxJurisdiction:totals.taxJurisdictions.join(' / '),taxProfileSource:totals.taxSources.join(' / '),status:'Completed',approvedBy,items:totals.lines.map(l=>({id:uid('txline'),productId:l.product.id,productName:l.product.productName,sku:l.product.sku,barcode:l.product.barcode||'',qty:l.qty,unitPrice:l.unitPrice,gross:l.gross,lineDiscount:l.lineDiscount,orderDiscount:l.orderDiscount,taxRate:l.taxRate,taxLabel:l.taxLabel,taxSource:l.taxSource,taxMode:l.taxMode,taxJurisdiction:l.taxJurisdiction,taxVerifiedAt:l.taxVerifiedAt,tax:l.tax,total:l.total,returnedQty:0}))};
+  const paymentMethod=o.paymentMethod||'Cash',tendered=roundCurrency(o.amountTendered,this.state.settings.currency);if(!this.paymentMethodOptions().includes(paymentMethod))throw new Error('Choose a payment method from the list.');if(paymentMethod==='Cash'&&tendered<totals.total)throw new Error('Cash tendered is less than the total due.');const saleLocationId=this.posLocation();this.assertLocationAllowed(saleLocationId,'The selling location');for(const l of totals.lines){this.assertSellableAt(l.product,l.qty,saleLocationId);this.movementResult(l.product,-l.qty,l.product.quantity);}
+  const receiptNumber=this.nextReceiptNumber(),createdAt=iso(),ctx=deviceRegionalContext(),tx={id:uid('tx'),receiptNumber,createdAt,localSaleDateTime:new Date().toLocaleString(),deviceTimeZone:ctx.timeZone,date:day(),sessionId:session?.id||'',locationId:saleLocationId,cashier:this.currentUser()?.name||session?.cashier||this.state.settings.cashierName||'Cashier',userId:this.currentUser()?.id||'',customerName:o.customerName||'',paymentMethod,paymentReference:o.paymentReference||'',amountTendered:paymentMethod==='Cash'?tendered:totals.total,change:paymentMethod==='Cash'?roundCurrency(tendered-totals.total,this.state.settings.currency):0,merchandise:totals.merchandise,discount:totals.discount,tax:totals.tax,total:totals.total,taxMode:totals.taxModes.length===1?totals.taxModes[0]:'mixed',taxJurisdiction:totals.taxJurisdictions.join(' / '),taxProfileSource:totals.taxSources.join(' / '),businessTaxIdLabel:this.state.settings.businessTaxIdLabel||'Tax ID',businessTaxId:this.state.settings.businessTaxId||'',status:'Completed',approvedBy,items:totals.lines.map(l=>({id:uid('txline'),productId:l.product.id,productName:l.product.productName,sku:l.product.sku,barcode:l.product.barcode||'',qty:l.qty,unitPrice:l.unitPrice,gross:l.gross,lineDiscount:l.lineDiscount,orderDiscount:l.orderDiscount,taxRate:l.taxRate,taxLabel:l.taxLabel,taxSource:l.taxSource,taxMode:l.taxMode,taxJurisdiction:l.taxJurisdiction,taxVerifiedAt:l.taxVerifiedAt,tax:l.tax,total:l.total,returnedQty:0}))};
   await this.atomicState(()=>{for(const item of tx.items){const p=this.productById(item.productId);this.movement(p,-item.qty,'POS Sale',{reason:`Point of sale ${receiptNumber}`,reference:receiptNumber,locationId:tx.locationId,strictLocation:Boolean(tx.locationId)});this.state.sales.push({id:uid('sale'),date:tx.date,createdAt,productId:item.productId,units:item.qty,revenue:item.total,channel:'POS',reference:receiptNumber,transactionId:tx.id,paymentMethod,locationId:tx.locationId,cashier:tx.cashier});}this.state.posTransactions.unshift(tx);this.commitReceiptHighWater(receiptNumber);this.state.ui.posCart=[];this.state.ui.posOrderDiscount=0;this.state.ui.posSearch='';},'sell');
   this.closeModal();this.toast(`Sale ${receiptNumber} completed.`);this.showReceipt(tx.id);
  }
  receiptHTML(tx){
-  return `<div class="receipt-print"><div class="receipt-center"><h2>${esc(this.state.settings.businessName)}</h2>${this.state.settings.businessAddress?`<p>${esc(this.state.settings.businessAddress)}</p>`:''}<p>${esc(tx.receiptNumber)}</p><p>${new Date(tx.createdAt).toLocaleString()}</p></div><hr class="receipt-rule"><p>Cashier: ${esc(tx.cashier)}</p>${tx.approvedBy?`<p>Discount approved by: ${esc(tx.approvedBy)}</p>`:''}<p>Store: ${esc(this.locationName(tx.locationId))}</p>${tx.taxJurisdiction?`<p>Tax jurisdiction: ${esc(tx.taxJurisdiction)}</p>`:''}${tx.deviceTimeZone?`<p>Device time zone: ${esc(tx.deviceTimeZone)}</p>`:''}${tx.customerName?`<p>Customer: ${esc(tx.customerName)}</p>`:''}<hr class="receipt-rule">${(tx.items||[]).map(i=>`<div class="receipt-line"><div>${esc(i.productName)}<small>${fmt(i.qty)} × ${money(i.unitPrice,this.state.settings.currency)}${num(i.lineDiscount)+num(i.orderDiscount)>0?` · discount ${money(num(i.lineDiscount)+num(i.orderDiscount),this.state.settings.currency)}`:''}<br>${esc(i.taxLabel||'Tax')} ${num(i.taxRate).toFixed(3).replace(/\.?0+$/,'')}% · ${esc(i.taxSource||'Stored rate')}</small></div><strong>${money(i.total,this.state.settings.currency)}</strong></div>`).join('')}<hr class="receipt-rule"><div class="receipt-total"><span>Merchandise</span><strong>${money(tx.merchandise,this.state.settings.currency)}</strong></div><div class="receipt-total"><span>Discount</span><strong>${num(tx.discount)>0?'−':''}${money(tx.discount,this.state.settings.currency)}</strong></div><div class="receipt-total"><span>${esc((tx.items||[]).map(i=>i.taxLabel).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' / ')||'Tax')}${tx.taxMode==='inclusive'?' (included)':''}</span><strong>${money(tx.tax,this.state.settings.currency)}</strong></div><div class="receipt-total grand"><span>TOTAL</span><strong>${money(tx.total,this.state.settings.currency)}</strong></div><div class="receipt-total"><span>${esc(tx.paymentMethod)}</span><strong>${money(tx.amountTendered,this.state.settings.currency)}</strong></div>${tx.paymentMethod==='Cash'?`<div class="receipt-total"><span>Change</span><strong>${money(tx.change,this.state.settings.currency)}</strong></div>`:''}<hr class="receipt-rule"><div class="receipt-center"><p>${esc(this.state.settings.receiptFooter||'Thank you.')}</p><p>Offline receipt · payment method recorded only</p></div></div>`;
+  /* v1.7.2: the tax / registration number is the one in force when the sale was made; receipts
+     from before the setting existed fall back to the current value. */
+  const taxIdLabel=tx.businessTaxIdLabel!==undefined?tx.businessTaxIdLabel:this.state.settings.businessTaxIdLabel,taxId=tx.businessTaxId!==undefined?tx.businessTaxId:this.state.settings.businessTaxId;
+  const voided=tx.status==='Voided'?`<p class="receipt-void">VOID</p>${tx.voidedAt?`<p>Voided ${esc(new Date(tx.voidedAt).toLocaleString())}${tx.voidedBy?` by ${esc(tx.voidedBy)}`:''}</p>`:''}${tx.voidReason?`<p>Reason: ${esc(tx.voidReason)}</p>`:''}${tx.voidApprovedBy?`<p>Void approved by: ${esc(tx.voidApprovedBy)}</p>`:''}`:'';
+  return `<div class="receipt-print"><div class="receipt-center"><h2>${esc(this.state.settings.businessName)}</h2>${this.state.settings.businessAddress?`<p>${esc(this.state.settings.businessAddress)}</p>`:''}${taxId?`<p>${esc(taxIdLabel||'Tax ID')}: ${esc(taxId)}</p>`:''}<p>${esc(tx.receiptNumber)}</p><p>${new Date(tx.createdAt).toLocaleString()}</p>${voided}</div><hr class="receipt-rule"><p>Cashier: ${esc(tx.cashier)}</p>${tx.approvedBy?`<p>Discount approved by: ${esc(tx.approvedBy)}</p>`:''}<p>Store: ${esc(this.locationName(tx.locationId))}</p>${tx.taxJurisdiction?`<p>Tax jurisdiction: ${esc(tx.taxJurisdiction)}</p>`:''}${tx.deviceTimeZone?`<p>Device time zone: ${esc(tx.deviceTimeZone)}</p>`:''}${tx.customerName?`<p>Customer: ${esc(tx.customerName)}</p>`:''}<hr class="receipt-rule">${(tx.items||[]).map(i=>`<div class="receipt-line"><div>${esc(i.productName)}<small>${fmt(i.qty)} × ${money(i.unitPrice,this.state.settings.currency)}${num(i.lineDiscount)+num(i.orderDiscount)>0?` · discount ${money(num(i.lineDiscount)+num(i.orderDiscount),this.state.settings.currency)}`:''}<br>${esc(i.taxLabel||'Tax')} ${num(i.taxRate).toFixed(3).replace(/\.?0+$/,'')}% · ${esc(i.taxSource||'Stored rate')}</small></div><strong>${money(i.total,this.state.settings.currency)}</strong></div>`).join('')}<hr class="receipt-rule"><div class="receipt-total"><span>Merchandise</span><strong>${money(tx.merchandise,this.state.settings.currency)}</strong></div><div class="receipt-total"><span>Discount</span><strong>${num(tx.discount)>0?'−':''}${money(tx.discount,this.state.settings.currency)}</strong></div><div class="receipt-total"><span>${esc((tx.items||[]).map(i=>i.taxLabel).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' / ')||'Tax')}${tx.taxMode==='inclusive'?' (included)':''}</span><strong>${money(tx.tax,this.state.settings.currency)}</strong></div><div class="receipt-total grand"><span>TOTAL</span><strong>${money(tx.total,this.state.settings.currency)}</strong></div><div class="receipt-total"><span>${esc(tx.paymentMethod)}</span><strong>${money(tx.amountTendered,this.state.settings.currency)}</strong></div>${tx.paymentMethod==='Cash'?`<div class="receipt-total"><span>Change</span><strong>${money(tx.change,this.state.settings.currency)}</strong></div>`:''}<hr class="receipt-rule"><div class="receipt-center"><p>${esc(this.state.settings.receiptFooter||'Thank you.')}</p><p>Offline receipt · payment method recorded only</p></div></div>`;
  }
- showReceipt(id){const tx=this.state.posTransactions.find(t=>t.id===id);if(!tx)throw new Error('Transaction could not be found.');const links=`${this.sectionAllowed('sales')?'<button class="button secondary" id="receiptSalesHistory">Sales & Usage</button>':''}${this.sectionAllowed('movements')?'<button class="button secondary" id="receiptMovements">Stock movements</button>':''}`;this.modal('Receipt',`<div class="notice success screen-only" style="margin-bottom:14px"><strong>Sale recorded in all required ledgers.</strong> The full receipt is in POS Transactions; each sold product was added to Sales & Usage; inventory was reduced and audited in Stock Movements.</div>${this.receiptHTML(tx)}`,`<button class="button ghost" id="receiptDone">Done</button>${links}<button class="button primary" id="printReceipt">Print receipt</button>`,'Point of Sale');$('#receiptDone').onclick=()=>{this.closeModal();this.navigate('pos');};const sales=$('#receiptSalesHistory');if(sales)sales.onclick=()=>{this.closeModal();this.navigate('sales');};const moves=$('#receiptMovements');if(moves)moves.onclick=()=>{this.closeModal();this.navigate('movements');};$('#printReceipt').onclick=()=>window.print();}
- openPosHistory(){
-  const rows=this.state.posTransactions.slice(0,100);this.modal('POS transactions',rows.length?`<div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Date</th><th>Store</th><th>Cashier</th><th>Payment</th><th>Status</th><th>Total</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr><td><strong>${esc(t.receiptNumber)}</strong></td><td>${new Date(t.createdAt).toLocaleString()}</td><td>${esc(this.locationName(t.locationId))}</td><td>${esc(t.cashier)}</td><td>${esc(t.paymentMethod)}</td><td><span class="badge ${this.statusClass(t.status)}">${esc(t.status)}</span></td><td>${money(t.total,this.state.settings.currency)}</td><td class="row-actions"><button class="button ghost small" data-pos-receipt="${esc(t.id)}">Receipt</button>${t.status!=='Returned'&&this.canOrApprove('refund')?`<button class="button secondary small" data-pos-return="${esc(t.id)}">Return</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p>No POS transactions have been recorded.</p>',`<button class="button ghost" data-modal-close>Close</button>`,'Point of Sale');$('[data-modal-close]').onclick=()=>this.closeModal();$$('[data-pos-receipt]').forEach(b=>b.onclick=()=>this.showReceipt(b.dataset.posReceipt));$$('[data-pos-return]').forEach(b=>b.onclick=()=>this.runAction(b,()=>this.openPosReturn(b.dataset.posReturn)));
+ showReceipt(id){
+  const tx=this.state.posTransactions.find(t=>t.id===id);if(!tx)throw new Error('Transaction could not be found.');
+  const links=`${this.sectionAllowed('sales')?'<button class="button secondary" id="receiptSalesHistory">Sales & Usage</button>':''}${this.sectionAllowed('movements')?'<button class="button secondary" id="receiptMovements">Stock movements</button>':''}`;
+  /* v1.7.2: a receipt found by number is where a return or a void starts. */
+  const canRefund=this.canOrApprove('refund'),returnable=canRefund&&this.posReturnable(tx),voidable=canRefund&&this.posVoidable(tx).ok;
+  const status=tx.status==='Voided'
+   ?`<div class="notice danger screen-only" style="margin-bottom:14px"><strong>This sale was voided.</strong> Its stock was put back, and it no longer counts toward revenue or the register's expected cash. The receipt number is kept and is never reused.</div>`
+   :`<div class="notice success screen-only" style="margin-bottom:14px"><strong>Sale recorded in all required ledgers.</strong> The full receipt is in POS Transactions; each sold product was added to Sales & Usage; inventory was reduced and audited in Stock Movements.</div>`;
+  this.modal('Receipt',`${status}${this.receiptHTML(tx)}`,`<button class="button ghost" id="receiptDone">Done</button>${links}${returnable?'<button class="button secondary" id="receiptReturn">Return items</button>':''}${voidable?'<button class="button danger" id="receiptVoid">Void sale</button>':''}<button class="button primary" id="printReceipt">Print receipt</button>`,'Point of Sale');
+  $('#receiptDone').onclick=()=>{this.closeModal();this.navigate('pos');};
+  const sales=$('#receiptSalesHistory');if(sales)sales.onclick=()=>{this.closeModal();this.navigate('sales');};
+  const moves=$('#receiptMovements');if(moves)moves.onclick=()=>{this.closeModal();this.navigate('movements');};
+  const ret=$('#receiptReturn');if(ret)ret.onclick=()=>this.runAction(ret,()=>this.openPosReturn(tx.id));
+  const voidButton=$('#receiptVoid');if(voidButton)voidButton.onclick=()=>this.runAction(voidButton,()=>this.openPosVoid(tx.id));
+  $('#printReceipt').onclick=()=>window.print();
+ }
+ /* v1.7.2: Transactions listed only the latest 100 sales, so on a busy day an earlier receipt could
+    no longer be reprinted or refunded. The list is now searchable across every transaction. */
+ posReturnable(tx){return Boolean(tx)&&tx.status!=='Returned'&&tx.status!=='Voided'&&(tx.items||[]).some(i=>num(i.qty)-num(i.returnedQty)>0);}
+ posHistoryMatches(query=''){
+  const q=slug(query),all=this.state.posTransactions;
+  if(!q)return all;
+  return all.filter(t=>slug([t.receiptNumber,t.customerName,t.cashier,t.paymentMethod,t.paymentReference,t.status,t.date,this.locationName(t.locationId)].join(' ')).includes(q));
+ }
+ posHistoryRowsHTML(query=''){
+  const all=this.state.posTransactions.length,matches=this.posHistoryMatches(query),rows=matches.slice(0,100),canRefund=this.canOrApprove('refund'),searching=Boolean(slug(query));
+  if(!all)return '<p>No POS transactions have been recorded.</p>';
+  if(!rows.length)return `<p>No receipt matches “${esc(String(query).trim())}”.</p>`;
+  const summary=`<p class="cell-sub" style="margin:0 0 8px">${searching?`${fmt(matches.length)} of ${fmt(all)} transaction${all===1?'':'s'} match`:`${fmt(all)} transaction${all===1?'':'s'}`}${matches.length>rows.length?` · showing the latest ${fmt(rows.length)}. Search by receipt number to find an older sale.`:''}</p>`;
+  return `${summary}<div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Date</th><th>Store</th><th>Cashier</th><th>Payment</th><th>Status</th><th>Total</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr><td><strong>${esc(t.receiptNumber)}</strong>${t.customerName?`<small class="cell-sub">${esc(t.customerName)}</small>`:''}</td><td>${new Date(t.createdAt).toLocaleString()}</td><td>${esc(this.locationName(t.locationId))}</td><td>${esc(t.cashier)}</td><td>${esc(t.paymentMethod)}</td><td><span class="badge ${this.statusClass(t.status)}">${esc(t.status)}</span></td><td>${money(t.total,this.state.settings.currency)}</td><td class="row-actions"><button class="button ghost small" data-pos-receipt="${esc(t.id)}">Receipt</button>${this.posReturnable(t)&&canRefund?`<button class="button secondary small" data-pos-return="${esc(t.id)}">Return</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+ }
+ openPosHistory(query=''){
+  this.modal('POS transactions',`<label class="field"><span>Find a receipt</span><input id="posHistorySearch" type="search" value="${esc(query)}" placeholder="Receipt number, customer, cashier, or payment reference" autocomplete="off"><small class="field-hint">Open a receipt to reprint it, return items, or void a sale from the open register.</small></label><div id="posHistoryResults">${this.posHistoryRowsHTML(query)}</div>`,`<button class="button ghost" data-modal-close>Close</button>`,'Point of Sale');
+  $('[data-modal-close]').onclick=()=>this.closeModal();
+  const input=$('#posHistorySearch'),results=$('#posHistoryResults');
+  const bind=()=>{
+   $$('[data-pos-receipt]',results).forEach(b=>b.onclick=()=>this.runAction(b,()=>this.showReceipt(b.dataset.posReceipt)));
+   $$('[data-pos-return]',results).forEach(b=>b.onclick=()=>this.runAction(b,()=>this.openPosReturn(b.dataset.posReturn)));
+   this.makeScrollRegionsFocusable(results);
+  };
+  const refresh=()=>{if(!results.isConnected)return;results.innerHTML=this.posHistoryRowsHTML(input.value);bind();};
+  const refreshSoon=debounce(refresh,180);
+  input.addEventListener('input',refreshSoon);
+  /* Enter on an exact receipt number (typed or scanned) opens it straight away. */
+  input.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();const tx=this.findReceipt(input.value);if(tx)this.runAction(null,()=>this.showReceipt(tx.id));else refresh();});
+  bind();
  }
  returnedAmountForLine(transactionId,lineId){
   return roundCurrency(this.state.posReturns.filter(r=>r.transactionId===transactionId).flatMap(r=>r.lines||[]).filter(l=>l.transactionLineId===lineId).reduce((a,l)=>a+num(l.refund),0),this.state.settings.currency);
@@ -6090,13 +6234,57 @@ class InventoryApp {
  }
  openPosReturn(id){
   this.assertCan('refund','Processing a return');
-  const tx=this.state.posTransactions.find(t=>t.id===id);if(!tx)throw new Error('Transaction could not be found.');const available=(tx.items||[]).filter(i=>num(i.qty)-num(i.returnedQty)>0);if(!available.length)throw new Error('Every item in this transaction has already been returned.');
-  this.modal(`Return ${tx.receiptNumber}`,`<form id="posReturnForm"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Sold</th><th>Returned</th><th>Return now</th><th>Refund value</th></tr></thead><tbody>${available.map(i=>{const remaining=num(i.qty)-num(i.returnedQty),remainingRefund=roundCurrency(Math.max(0,num(i.total)-this.returnedAmountForLine(tx.id,i.id)),this.state.settings.currency),average=roundCurrency(remainingRefund/Math.max(1,remaining),this.state.settings.currency);return `<tr><td>${esc(i.productName)}<small class="cell-sub">${esc(i.sku)}</small></td><td>${fmt(i.qty)}</td><td>${fmt(i.returnedQty||0)}</td><td><input name="return_${i.id}" type="number" min="0" max="${remaining}" step="1" value="0"></td><td>${money(average,this.state.settings.currency)} avg<small class="cell-sub">${money(remainingRefund,this.state.settings.currency)} remaining</small></td></tr>`}).join('')}</tbody></table></div><div class="form-grid"><label class="field"><span>Refund method</span><select name="refundMethod">${['Cash','GCash','Maya','Card','Bank Transfer','Store Credit','Other'].map(x=>`<option ${x===tx.paymentMethod?'selected':''}>${x}</option>`).join('')}</select></label>${this.field('Reason','reason','Customer return')}</div><div class="notice warning">Returned quantities are added back to inventory and negative sales rows are written for audit and reporting. Cash refunds require an open register when cash-session control is enabled.</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button danger" id="confirmPosReturn">Process return</button>`,'Point of Sale');$('[data-modal-cancel]').onclick=()=>this.closeModal();const button=$('#confirmPosReturn');button.onclick=()=>this.runAction(button,()=>this.processPosReturn(tx.id));
+  const tx=this.state.posTransactions.find(t=>t.id===id);if(!tx)throw new Error('Transaction could not be found.');if(tx.status==='Voided')throw new Error(`${tx.receiptNumber} was voided, so there is nothing left to return.`);const available=(tx.items||[]).filter(i=>num(i.qty)-num(i.returnedQty)>0);if(!available.length)throw new Error('Every item in this transaction has already been returned.');
+  this.modal(`Return ${tx.receiptNumber}`,`<form id="posReturnForm"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Sold</th><th>Returned</th><th>Return now</th><th>Refund value</th></tr></thead><tbody>${available.map(i=>{const remaining=num(i.qty)-num(i.returnedQty),remainingRefund=roundCurrency(Math.max(0,num(i.total)-this.returnedAmountForLine(tx.id,i.id)),this.state.settings.currency),average=roundCurrency(remainingRefund/Math.max(1,remaining),this.state.settings.currency);return `<tr><td>${esc(i.productName)}<small class="cell-sub">${esc(i.sku)}</small></td><td>${fmt(i.qty)}</td><td>${fmt(i.returnedQty||0)}</td><td><input name="return_${i.id}" type="number" min="0" max="${remaining}" step="1" value="0"></td><td>${money(average,this.state.settings.currency)} avg<small class="cell-sub">${money(remainingRefund,this.state.settings.currency)} remaining</small></td></tr>`}).join('')}</tbody></table></div><div class="form-grid"><label class="field"><span>Refund method</span><select name="refundMethod">${this.paymentMethodOptions(tx.paymentMethod).map(x=>`<option ${x===tx.paymentMethod?'selected':''}>${esc(x)}</option>`).join('')}</select></label>${this.field('Reason','reason','Customer return')}</div><div class="notice warning">Returned quantities are added back to inventory and negative sales rows are written for audit and reporting. Cash refunds require an open register when cash-session control is enabled.</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button danger" id="confirmPosReturn">Process return</button>`,'Point of Sale');$('[data-modal-cancel]').onclick=()=>this.closeModal();const button=$('#confirmPosReturn');button.onclick=()=>this.runAction(button,()=>this.processPosReturn(tx.id));
  }
  async processPosReturn(id){
   this.assertCan('refund','Processing a return');
-  const tx=this.state.posTransactions.find(t=>t.id===id),form=$('#posReturnForm');if(!tx||!form)throw new Error('Return form is unavailable.');this.assertLocationAllowed(tx.locationId,'The store that made this sale');const fd=new FormData(form),lines=[];for(const item of tx.items||[]){const raw=fd.get(`return_${item.id}`);if(raw===null)continue;const qty=Math.floor(Number(raw));const remaining=num(item.qty)-num(item.returnedQty);if(!Number.isFinite(qty)||qty<0||qty>remaining)throw new Error(`Invalid return quantity for ${item.productName}.`);if(qty>0)lines.push({item,qty,refund:this.refundAmountForLine(tx,item,qty)});}if(!lines.length)throw new Error('Enter at least one return quantity.');const refundMethod=String(fd.get('refundMethod')||tx.paymentMethod),reason=String(fd.get('reason')||'Customer return'),session=this.activeCashSession();if(refundMethod==='Cash'&&this.state.settings.requireCashSession&&!session)throw new Error('Open the register before issuing a cash refund so the cash drawer reconciliation stays accurate.');const total=roundCurrency(lines.reduce((a,l)=>a+l.refund,0),this.state.settings.currency);
+  const tx=this.state.posTransactions.find(t=>t.id===id),form=$('#posReturnForm');if(!tx||!form)throw new Error('Return form is unavailable.');if(tx.status==='Voided')throw new Error(`${tx.receiptNumber} was voided, so there is nothing left to return.`);this.assertLocationAllowed(tx.locationId,'The store that made this sale');const fd=new FormData(form),lines=[];for(const item of tx.items||[]){const raw=fd.get(`return_${item.id}`);if(raw===null)continue;const qty=Math.floor(Number(raw));const remaining=num(item.qty)-num(item.returnedQty);if(!Number.isFinite(qty)||qty<0||qty>remaining)throw new Error(`Invalid return quantity for ${item.productName}.`);if(qty>0)lines.push({item,qty,refund:this.refundAmountForLine(tx,item,qty)});}if(!lines.length)throw new Error('Enter at least one return quantity.');const refundMethod=String(fd.get('refundMethod')||tx.paymentMethod),reason=String(fd.get('reason')||'Customer return'),session=this.activeCashSession();if(!this.paymentMethodOptions(tx.paymentMethod).includes(refundMethod))throw new Error('Choose a refund method from the list.');if(refundMethod==='Cash'&&this.state.settings.requireCashSession&&!session)throw new Error('Open the register before issuing a cash refund so the cash drawer reconciliation stays accurate.');const total=roundCurrency(lines.reduce((a,l)=>a+l.refund,0),this.state.settings.currency);
   await this.atomicState(()=>{for(const l of lines){const p=this.productById(l.item.productId);if(!p)throw new Error(`${l.item.productName} no longer exists in inventory.`);this.movement(p,l.qty,'POS Return',{reason,reference:tx.receiptNumber,locationId:tx.locationId,strictLocation:Boolean(tx.locationId)});l.item.returnedQty=num(l.item.returnedQty)+l.qty;this.state.sales.push({id:uid('sale'),date:day(),createdAt:iso(),productId:p.id,units:-l.qty,revenue:-l.refund,channel:'POS Return',reference:tx.receiptNumber,transactionId:tx.id,paymentMethod:refundMethod,locationId:tx.locationId,cashier:session?.cashier||this.currentUser()?.name||this.state.settings.cashierName||'Cashier'});}this.state.posReturns.unshift({id:uid('return'),approvedBy:this.approvalStamp(),transactionId:tx.id,receiptNumber:tx.receiptNumber,date:iso(),sessionId:session?.id||'',locationId:tx.locationId,cashier:session?.cashier||this.currentUser()?.name||this.state.settings.cashierName||'Cashier',refundMethod,reason,total,lines:lines.map(l=>({transactionLineId:l.item.id,productId:l.item.productId,qty:l.qty,refund:l.refund}))});tx.status=(tx.items||[]).every(i=>num(i.returnedQty)>=num(i.qty))?'Returned':'Partially Returned';},'refund');this.closeModal();this.toast(`Return processed: ${money(total,this.state.settings.currency)}.`);this.navigate('pos');
+ }
+
+ /* v1.7.2: a void cancels a sale outright — the wrong item was rung up, or the customer walked away
+    before paying. It is allowed only while the sale's register session is still open (or, with no
+    session, on the same day), so a closed and counted drawer is never changed afterwards; later
+    corrections are returns. Stock goes back to the selling location, offsetting Sales & Usage rows
+    bring revenue and tax back to zero, and the register's expected cash drops because voided sales
+    are excluded from it. The receipt keeps its number, marked VOID. */
+ posVoidable(tx){
+  if(!tx)return {ok:false,reason:'Transaction could not be found.'};
+  if(tx.status==='Voided')return {ok:false,reason:`${tx.receiptNumber} has already been voided.`};
+  if((tx.status||'Completed')!=='Completed'||(tx.items||[]).some(i=>num(i.returnedQty)>0)||this.state.posReturns.some(r=>r.transactionId===tx.id))return {ok:false,reason:`${tx.receiptNumber} already has a return recorded against it. Return the remaining items instead of voiding the sale.`};
+  if(tx.sessionId){
+   const session=this.state.cashSessions.find(x=>x.id===tx.sessionId);
+   if(!session||session.status!=='Open')return {ok:false,reason:`${tx.receiptNumber} belongs to a register session that has been closed and counted. Use Return instead, so the closed count is not changed.`};
+  }else if(String(tx.date||'')!==day())return {ok:false,reason:`${tx.receiptNumber} was not made today. Only sales from today can be voided; use Return instead.`};
+  return {ok:true,reason:''};
+ }
+ openPosVoid(id){
+  this.assertCan('refund','Voiding a sale');
+  const tx=this.state.posTransactions.find(t=>t.id===id),check=this.posVoidable(tx);if(!check.ok)throw new Error(check.reason);
+  this.assertLocationAllowed(tx.locationId,'The store that made this sale');
+  const cur=this.state.settings.currency,units=(tx.items||[]).reduce((a,i)=>a+num(i.qty),0),cash=tx.paymentMethod==='Cash';
+  this.modal(`Void ${tx.receiptNumber}`,`<form id="posVoidForm"><div class="stat-list"><div class="stat-row"><span>Receipt</span><strong>${esc(tx.receiptNumber)}</strong></div><div class="stat-row"><span>Items</span><strong>${fmt(units)}</strong></div><div class="stat-row"><span>Paid by</span><strong>${esc(tx.paymentMethod)}</strong></div><div class="stat-row"><span>Total</span><strong>${money(tx.total,cur)}</strong></div></div><div class="form-grid">${this.field('Reason (required, kept in the audit log)','reason','')}</div><div class="notice warning"><strong>A void cancels the whole sale.</strong> Every item goes back into stock at ${esc(this.locationName(tx.locationId))}, and the sale stops counting toward revenue and ${cash?`the register's expected cash — hand the customer back ${money(tx.total,cur)}`:'the register session total'}. The receipt number stays in the history marked VOID and is never reused.</div></form>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button danger" id="confirmPosVoid">Void sale</button>`,'Point of Sale');
+  $('[data-modal-cancel]').onclick=()=>this.closeModal();const button=$('#confirmPosVoid');button.onclick=()=>this.runAction(button,()=>this.processPosVoid(tx.id));
+ }
+ async processPosVoid(id){
+  this.assertCan('refund','Voiding a sale');
+  const tx=this.state.posTransactions.find(t=>t.id===id),form=$('#posVoidForm');if(!tx||!form)throw new Error('Void form is unavailable.');
+  const check=this.posVoidable(tx);if(!check.ok)throw new Error(check.reason);
+  this.assertLocationAllowed(tx.locationId,'The store that made this sale');
+  const reason=String(new FormData(form).get('reason')||'').trim();if(!reason)throw new Error('Enter a reason for the void.');
+  for(const item of tx.items||[])if(!this.productById(item.productId))throw new Error(`${item.productName} no longer exists in inventory, so its stock cannot be put back. Return the other items instead.`);
+  const actor=this.currentUser(),approvedBy=this.approvalStamp(),voidedAt=iso(),cur=this.state.settings.currency;
+  await this.atomicState(()=>{
+   for(const item of tx.items||[]){
+    const p=this.productById(item.productId);
+    this.movement(p,num(item.qty),'POS Void',{reason:`Void ${tx.receiptNumber}: ${reason}`,reference:tx.receiptNumber,locationId:tx.locationId,strictLocation:Boolean(tx.locationId)});
+    this.state.sales.push({id:uid('sale'),date:tx.date||day(),createdAt:voidedAt,productId:item.productId,units:-num(item.qty),revenue:-num(item.total),channel:'POS Void',reference:tx.receiptNumber,transactionId:tx.id,paymentMethod:tx.paymentMethod,locationId:tx.locationId,cashier:actor?.name||tx.cashier});
+   }
+   Object.assign(tx,{status:'Voided',voidedAt,voidReason:reason,voidedBy:actor?.name||this.state.settings.cashierName||'Cashier',voidedByUserId:actor?.id||'',voidApprovedBy:approvedBy});
+   this.audit('Sale voided',`${tx.receiptNumber} · ${money(tx.total,cur)} by ${tx.paymentMethod} · ${reason}${approvedBy?` · approved by ${approvedBy}`:''}`);
+  },'refund');
+  this.closeModal();this.toast(`${tx.receiptNumber} voided.${tx.paymentMethod==='Cash'?` Hand ${money(tx.total,cur)} back to the customer.`:''}`);this.navigate('pos');
  }
 
  openSale(){
@@ -6931,6 +7119,9 @@ class InventoryApp {
   /* v1.5: which site this computer is, and its idle lock, belong to the device, not the data. */
   if(prior.stationLocationId&&this.state.locations.some(l=>l.id===prior.stationLocationId))s.stationLocationId=prior.stationLocationId;
   if(prior.autoLockMinutes!==undefined)s.autoLockMinutes=clamp(Math.floor(num(prior.autoLockMinutes)),0,240);
+  /* v1.7.2: a restore or reset must not forget that this device already saved a backup file. */
+  const priorBackupAt=Date.parse(prior.lastBackupExportAt||''),currentBackupAt=Date.parse(s.lastBackupExportAt||'');
+  if(Number.isFinite(priorBackupAt)&&!(currentBackupAt>=priorBackupAt))s.lastBackupExportAt=String(prior.lastBackupExportAt);
   if(keepConnection)Object.assign(s,{driveFileId:prior.driveFileId||'',driveAutoSync:Boolean(prior.driveAutoSync),driveSyncEnabled:Boolean(prior.driveSyncEnabled),driveRevision:Number(prior.driveRevision||0),driveLastSyncRevision:Number(prior.driveLastSyncRevision||0),driveLastSyncAt:prior.driveLastSyncAt||''});
   /* A blank or sample reset keeps the Client ID for convenience but disarms the connection, or
      auto-upload would replace a real Drive backup with an empty workspace 60 seconds later. */
@@ -7078,7 +7269,7 @@ class InventoryApp {
   const snapshot=clone({...this.state,backups:[]});
   snapshot.ui={...snapshot.ui,activeImport:null};/* QA2 fix (L6): don't embed parsed import-file rows in every recovery point. */
   const b={id:uid('bak'),date:iso(),reason,summary:{products:snapshot.products.length,movements:snapshot.movements.length,suppliers:snapshot.suppliers.length,purchaseOrders:snapshot.purchaseOrders.length},workspace:snapshot};
-  this.state.backups.push(b);if(this.state.backups.length>15)this.state.backups.shift();await this.save();
+  this.state.backups.push(b);if(this.state.backups.length>15)this.state.backups.shift();if(download)this.state.settings.lastBackupExportAt=b.date;await this.save();
   if(download){downloadBlob(new Blob([JSON.stringify({format:'InventoryCommandCenterBackup',version:1,createdAt:b.date,workspace:this.redactForNonAdmin(clone(snapshot))},null,2)],{type:'application/json'}),`inventory-backup-${day()}.json`);this.toast('Backup recovery point created and downloaded.');}
   return b;
  }
@@ -7099,7 +7290,7 @@ class InventoryApp {
   this.modal('Restore backup file',`<div class="notice warning"><strong>Restore preview for ${esc(name)}.</strong> Current data will be backed up first.</div><div class="stat-list"><div class="stat-row"><span>Products</span><strong>${ws.products.length}</strong></div><div class="stat-row"><span>Suppliers</span><strong>${(ws.suppliers||[]).length}</strong></div><div class="stat-row"><span>Movements</span><strong>${ws.movements.length}</strong></div><div class="stat-row"><span>Purchase orders</span><strong>${(ws.purchaseOrders||[]).length}</strong></div></div>`,`<button class="button ghost" data-modal-cancel>Cancel</button><button class="button danger" id="confirmExternalRestore">Create backup and restore</button>`);
   $('[data-modal-cancel]').onclick=()=>this.closeModal();const button=$('#confirmExternalRestore');button.onclick=()=>this.runAction(button,async()=>{await this.createBackup(`Automatic backup before restoring ${name}`,false);const backups=this.state.backups,priorReceiptMark=this.state.settings.receiptHighWater,priorCloud=clone(this.state.settings),priorUsers=clone(this.state.users);await this.atomicState(()=>{this.state=this.migrate(clone(ws));this.reconcileRedactedPins(this.state.users,priorUsers);this.state.backups=backups;this.preserveReceiptHighWater(priorReceiptMark);this.adoptDeviceCloudSettings(priorCloud);});this.closeModal();this.renderNav();this.toast('Backup file restored successfully.');this.navigate('dashboard');});
  }
- exportJSON(){this.assertCan('export','Exporting a JSON backup');const ws=clone({...this.state,backups:[]});ws.ui={...ws.ui,activeImport:null};/* v1.6: only an Admin export carries the transfer-file exchange key. */this.redactForNonAdmin(ws);/* QA2 fix (L6). */downloadBlob(new Blob([JSON.stringify({format:'InventoryCommandCenterBackup',version:1,createdAt:iso(),workspace:ws},null,2)],{type:'application/json'}),`inventory-command-center-${day()}.json`);this.toast('Portable JSON backup downloaded.');}
+ exportJSON(){this.assertCan('export','Exporting a JSON backup');const ws=clone({...this.state,backups:[]});ws.ui={...ws.ui,activeImport:null};/* v1.6: only an Admin export carries the transfer-file exchange key. */this.redactForNonAdmin(ws);/* QA2 fix (L6). */downloadBlob(new Blob([JSON.stringify({format:'InventoryCommandCenterBackup',version:1,createdAt:iso(),workspace:ws},null,2)],{type:'application/json'}),`inventory-command-center-${day()}.json`);this.noteOffDeviceBackup();this.toast('Portable JSON backup downloaded.');}
  async saveSettings(){
   this.assertCan('settings','Changing workspace settings');
   const form=$('#settingsForm');if(!form)throw new Error('Settings form is not open.');const o=this.formObject(form);
@@ -7108,6 +7299,10 @@ class InventoryApp {
   const previousCurrency=normalizeCurrencyCode(this.state.settings.currency);
   for(const k of ['defaultTaxRate','defaultLeadTime','reviewPeriod','deadStockDays','overstockFactor'])o[k]=num(o[k]);
   o.autoLockMinutes=clamp(Math.floor(num(o.autoLockMinutes)),0,240);
+  o.paymentMethods=normalizePaymentMethods(o.paymentMethods);
+  o.backupReminderDays=clamp(Math.floor(num(o.backupReminderDays)),0,365);
+  o.businessTaxIdLabel=String(o.businessTaxIdLabel||'').trim().slice(0,40)||'Tax ID';
+  o.businessTaxId=String(o.businessTaxId||'').trim().slice(0,80);
   o.stationLocationId=String(o.stationLocationId||'');if(o.stationLocationId&&!this.locationById(o.stationLocationId))throw new Error('Choose an existing location for this installation.');
   /* v1.6 exchange key: write-only field. Blank keeps the current key. */
   const keyInput=String(o.transferExchangeKeyInput||''),clearKey=Boolean(o.clearExchangeKey);delete o.transferExchangeKeyInput;delete o.clearExchangeKey;
@@ -7442,7 +7637,7 @@ class InventoryApp {
   if(!window.XLSXLite)throw new Error('The local XLSX engine did not load.');
   const wb=this.workbookDefinition(),blob=await XLSXLite.build(wb,{type:'blob'}),buffer=await blob.arrayBuffer();
   const packageReport=await XLSXLite.validatePackage(buffer);this.validateWorkbookPackage(wb,packageReport);
-  XLSXLite.download(blob,`inventory-command-center-${day()}.xlsx`);this.toast(`Verified and exported ${packageReport.sheetCount} Excel-compatible decorated worksheets with valid row counts, formulas, styles, and freeze panes.`);
+  XLSXLite.download(blob,`inventory-command-center-${day()}.xlsx`);this.noteOffDeviceBackup();this.toast(`Verified and exported ${packageReport.sheetCount} Excel-compatible decorated worksheets with valid row counts, formulas, styles, and freeze panes.`);
  }
 
  /* QA fix (critical): CSV exports now use a customer-safe schema. The signed XLSX
@@ -9201,6 +9396,145 @@ class InventoryApp {
     const stored=await this.db.get();assert(Array.isArray(stored.backups)&&stored.backups.length===this.state.backups.length,'Recovery points were not read back with the workspace');
     return `${fmt(this.state.backups.length)} recovery point(s) stored separately and read back; ordinary saves skip them`;
    }finally{this.db.commit=realCommit;}
+  });
+  /* ---- v1.7.2 ------------------------------------------------------------------------ */
+  await asyncTest('v1.7.2 a refused barcode scan is shown to the cashier',async()=>{
+   const prior={require:this.state.settings.requireCashSession,section:this.state.ui.section},errorsBefore=(window.__APP_ERRORS||[]).length;
+   this.state.settings.requireCashSession=false;
+   try{
+    this.navigate('pos');
+    const input=$('#posSearch');assert(input,'The POS search box did not render');
+    $('#toastRegion').innerHTML='';
+    input.value='@@@';input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    await new Promise(r=>setTimeout(r,30));
+    assert(/at least one Unicode letter or number/.test($('#toastRegion').textContent),'An unreadable scan produced no message');
+    assert((window.__APP_ERRORS||[]).length===errorsBefore,'The refused scan still escaped as an uncaught error');
+    return 'Unreadable code → an "Action failed" message instead of a silent uncaught error';
+   }finally{this.state.settings.requireCashSession=prior.require;$('#toastRegion').innerHTML='';this.navigate(prior.section||'dashboard');}
+  });
+  test('v1.7.2 receipts are found by number beyond the latest 100',()=>{
+   const priorTx=this.state.posTransactions;
+   try{
+    this.state.posTransactions=Array.from({length:130},(_,i)=>({id:`qa_rl_${i}`,receiptNumber:`POS-QA-${String(130-i).padStart(4,'0')}`,createdAt:iso(),date:day(),locationId:'',cashier:'QA',paymentMethod:'Cash',status:'Completed',total:1,items:[{id:`qa_rl_line_${i}`,productId:'qa_none',productName:'QA',sku:'QA',qty:1,total:1,returnedQty:0}]}));
+    assert(this.findReceipt(' pos-qa-0001 ')?.id==='qa_rl_129','Receipt lookup is not exact and case-insensitive');
+    assert(this.findReceipt('POS-QA-000')===null,'A partial receipt number matched');
+    this.openPosHistory();
+    assert(!$('#posHistoryResults').textContent.includes('POS-QA-0001'),'Fixture did not exceed the 100-row list');
+    this.openPosHistory('POS-QA-0001');
+    const text=$('#posHistoryResults').textContent;
+    assert(text.includes('POS-QA-0001')&&/1 of 130/.test(text),'Searching Transactions did not reach the 130th receipt');
+    return 'Receipt 130 of 130 is found by exact lookup and by searching Transactions';
+   }finally{this.state.posTransactions=priorTx;this.closeModal();}
+  });
+  test('v1.7.2 voids are limited to the open register and unreturned sales',()=>{
+   const priorSessions=this.state.cashSessions,priorReturns=this.state.posReturns;
+   try{
+    this.state.cashSessions=[{id:'qa_vs_open',status:'Open'},{id:'qa_vs_closed',status:'Closed'}];this.state.posReturns=[];
+    const base={id:'qa_vt',receiptNumber:'POS-QA-V',status:'Completed',date:day(),items:[{id:'qa_vl',qty:1,returnedQty:0}]};
+    assert(this.posVoidable({...base,sessionId:'qa_vs_open'}).ok,'A sale in the open session is not voidable');
+    assert(!this.posVoidable({...base,sessionId:'qa_vs_closed'}).ok,'A sale in a closed, counted session was voidable');
+    assert(!this.posVoidable({...base,sessionId:'qa_vs_gone'}).ok,'A sale whose session is missing was voidable');
+    assert(this.posVoidable({...base,sessionId:''}).ok,'A same-day sale made without a session is not voidable');
+    assert(!this.posVoidable({...base,sessionId:'',date:'2000-01-01'}).ok,'An old sale made without a session was voidable');
+    assert(!this.posVoidable({...base,sessionId:'qa_vs_open',status:'Partially Returned',items:[{id:'qa_vl',qty:2,returnedQty:1}]}).ok,'A partly returned sale was voidable');
+    assert(!this.posVoidable({...base,sessionId:'qa_vs_open',status:'Voided'}).ok,'A voided sale was voidable again');
+    return 'Open session ✓ · same-day sessionless ✓ · closed or missing session ✗ · old ✗ · returned ✗ · voided ✗';
+   }finally{this.state.cashSessions=priorSessions;this.state.posReturns=priorReturns;}
+  });
+  await asyncTest('v1.7.2 a void restores stock, revenue, and expected cash',async()=>{
+   const snapshot=clone({...this.state,backups:[]}),backups=this.state.backups,cur=this.state.settings.currency;
+   try{
+    const sellable=(p,locId)=>this.isOperational(p)&&this.posSellable(this.calcProduct(p),locId)>=2;
+    const loc=this.state.locations.find(l=>this.state.products.some(p=>sellable(p,l.id)));assert(loc,'No fixture location with sellable stock');
+    const product=this.state.products.find(p=>sellable(p,loc.id));
+    const session={id:'qa_void_session',openedAt:iso(),closedAt:'',locationId:loc.id,cashier:'QA',openingFloat:50,closingCount:null,expectedCash:null,variance:null,status:'Open',note:''};
+    this.state.cashSessions.unshift(session);this.state.ui.posLocationId=loc.id;
+    const m0=this.salesMetrics(),before={qty:this.qtyAt(product.id,loc.id),cash:this.cashSessionSummary(session).expectedCash,revenue:m0.netRevenue,tax:m0.taxCollected,count:m0.transactions};
+    this.state.ui.posCart=[{productId:product.id,qty:2,discount:0}];this.state.ui.posOrderDiscount=0;
+    this.openPosCheckout();await this.completePosSale();
+    const tx=this.state.posTransactions[0];
+    assert(tx.sessionId===session.id&&tx.status==='Completed'&&tx.paymentMethod==='Cash','The fixture sale was not recorded in the QA session');
+    assert(this.qtyAt(product.id,loc.id)===before.qty-2,'The sale did not reduce stock');
+    assert(this.cashSessionSummary(session).expectedCash===roundCurrency(before.cash+tx.total,cur),'The sale did not raise expected cash');
+    this.closeModal();this.openPosVoid(tx.id);
+    let refused=false;try{await this.processPosVoid(tx.id);}catch(e){refused=/reason/.test(e.message);}
+    assert(refused&&tx.status==='Completed','A void without a reason was accepted');
+    $('#posVoidForm').elements.reason.value='QA wrong item';
+    await this.processPosVoid(tx.id);
+    const voided=this.state.posTransactions.find(t=>t.id===tx.id),rows=this.state.sales.filter(r=>r.transactionId===tx.id),m1=this.salesMetrics();
+    assert(voided.status==='Voided'&&voided.voidReason==='QA wrong item'&&voided.voidedAt,'The transaction was not marked voided');
+    assert(this.qtyAt(product.id,loc.id)===before.qty,'The void did not put the stock back at the selling location');
+    assert(this.state.movements.some(m=>m.type==='POS Void'&&m.reference===tx.receiptNumber&&m.change===2),'The void left no stock movement');
+    assert(roundCurrency(rows.reduce((a,r)=>a+num(r.revenue),0),cur)===0&&rows.reduce((a,r)=>a+num(r.units),0)===0,'Sales rows for the voided receipt do not net to zero');
+    assert(this.cashSessionSummary(session).expectedCash===before.cash,'Expected cash still includes the voided sale');
+    assert(m1.netRevenue===before.revenue&&m1.taxCollected===before.tax&&m1.transactions===before.count,'Revenue, tax, or the transaction count still include the voided sale');
+    assert(this.nextReceiptNumber()!==tx.receiptNumber,'A voided receipt number would be reused');
+    assert(/receipt-void/.test(this.receiptHTML(voided)),'The receipt does not show VOID');
+    let noReturn=false;try{this.openPosReturn(tx.id);}catch(e){noReturn=/voided/.test(e.message);}
+    assert(noReturn,'A voided sale could be returned');
+    assert(this.state.auditLog.some(a=>a.action==='Sale voided'&&String(a.detail).includes(tx.receiptNumber)),'The void was not audited');
+    return `Sold 2 × ${product.sku} for ${money(tx.total,cur)} cash, voided: stock, revenue, tax, and expected cash back where they were; receipt kept as VOID`;
+   }finally{this.closeModal();this.state=this.migrate(snapshot,{clearSession:false});this.state.backups=backups;await this.save();}
+  });
+  test('v1.7.2 payment methods are a setting, and older workspaces keep theirs',()=>{
+   assert(JSON.stringify(normalizePaymentMethods(' card, CASH ,Card,, GCash '))===JSON.stringify(['Cash','card','GCash']),'Payment methods were not trimmed, de-duplicated, and led by Cash');
+   assert(JSON.stringify(normalizePaymentMethods('["Card","Cash"]'))===JSON.stringify(['Cash','Card']),'A workbook value was not read');
+   assert(normalizePaymentMethods([]).join()==='Cash'&&normalizePaymentMethods(null).join()==='Cash','Cash is not always present');
+   const legacy=clone({...this.state,backups:[]});delete legacy.settings.paymentMethods;
+   assert(this.migrate(legacy).settings.paymentMethods.includes('GCash'),'A pre-1.7.2 workspace lost the methods its till offered');
+   assert(!blankState().settings.paymentMethods.includes('GCash'),'New workspaces still default to region-specific methods');
+   const prior=this.state.settings.paymentMethods;
+   try{
+    this.state.settings.paymentMethods=['Cash','Voucher'];
+    assert(this.paymentMethodOptions('GCash').join('|')==='Cash|Voucher|GCash','A refund cannot go back by the original method once it was removed from the list');
+    assert(this.paymentMethodOptions('cash').join('|')==='Cash|Voucher','The original method was listed twice');
+    return 'Normalised list led by Cash; old workspaces keep GCash and Maya; new ones start neutral';
+   }finally{this.state.settings.paymentMethods=prior;}
+  });
+  test('v1.7.2 the business tax number prints on receipts',()=>{
+   const prior={label:this.state.settings.businessTaxIdLabel,id:this.state.settings.businessTaxId};
+   try{
+    Object.assign(this.state.settings,{businessTaxIdLabel:'VAT Reg',businessTaxId:'123-456 <x>'});
+    const older={id:'qa_tid',receiptNumber:'POS-QA-TID',createdAt:iso(),items:[],paymentMethod:'Card'};
+    assert(this.receiptHTML(older).includes('VAT Reg: 123-456 &lt;x&gt;'),'The tax number is missing, or unescaped, on a receipt from before the setting');
+    const stamped={...older,businessTaxIdLabel:'TIN',businessTaxId:'999'};
+    assert(this.receiptHTML(stamped).includes('TIN: 999')&&!this.receiptHTML(stamped).includes('123-456'),'A receipt did not keep the number in force when it was issued');
+    this.state.settings.businessTaxId='';
+    assert(!this.receiptHTML(older).includes('VAT Reg'),'An empty tax number still printed its label');
+    return 'Printed, escaped, and fixed at the time of sale';
+   }finally{Object.assign(this.state.settings,{businessTaxIdLabel:prior.label,businessTaxId:prior.id});}
+  });
+  test('v1.7.2 the backup reminder follows the last off-device backup',()=>{
+   const prior=clone(this.state.settings),s=this.state.settings;
+   try{
+    Object.assign(s,{lastBackupExportAt:'',driveLastSyncAt:'',backupReminderDays:7});
+    assert(this.state.products.length&&this.backupReminder().due&&/never been backed up/.test(this.backupReminderHTML()),'No reminder for a workspace that was never backed up');
+    s.lastBackupExportAt=new Date(Date.now()-2*86400000).toISOString();
+    assert(!this.backupReminder().due&&this.backupReminderHTML()==='','A reminder showed two days after a backup');
+    s.lastBackupExportAt=new Date(Date.now()-8*86400000).toISOString();
+    assert(this.backupReminder().due&&this.backupReminder().age===8,'No reminder eight days after a backup');
+    s.driveLastSyncAt=iso();assert(!this.backupReminder().due,'A Drive upload did not count as a backup');
+    s.driveLastSyncAt='';s.backupReminderDays=0;assert(!this.backupReminder().due,'A reminder showed while switched off');
+    const stamp=new Date(Date.now()-86400000).toISOString();s.lastBackupExportAt='';
+    this.adoptDeviceCloudSettings({lastBackupExportAt:stamp});assert(s.lastBackupExportAt===stamp,'A restore forgot when this device last saved a backup');
+    this.adoptDeviceCloudSettings({lastBackupExportAt:'2001-01-01T00:00:00.000Z'});assert(s.lastBackupExportAt===stamp,'A restore moved the last backup time backwards');
+    return 'Never → due · 2 days → quiet · 8 days → due · Drive counts · 0 = off · kept across restores';
+   }finally{this.state.settings=prior;}
+  });
+  await asyncTest('v1.7.2 creating the first user switches auto sign-out on',async()=>{
+   const snapshot=clone({...this.state,backups:[]}),backups=this.state.backups;
+   try{
+    const first=name=>{const v=this.validateUserChange({name,role:'Admin',pin:'4826',permissions:['*']});assert(!v.errors.length,v.errors.join(' '));return v;};
+    this.state.users=[];this.state.ui.currentUserId='';this.state.settings.autoLockMinutes=0;
+    await this.commitUser(null,first('QA First'));
+    assert(this.state.settings.autoLockMinutes===DEFAULT_AUTO_LOCK_MINUTES,`Auto sign-out is ${this.state.settings.autoLockMinutes} after the first user`);
+    this.state.users=[];this.state.ui.currentUserId='';this.state.settings.autoLockMinutes=3;
+    await this.commitUser(null,first('QA First Again'));
+    assert(this.state.settings.autoLockMinutes===3,'A chosen auto sign-out time was overwritten');
+    this.state.settings.autoLockMinutes=0;this.navigate('users');
+    assert(/Auto sign-out is off/.test(this.dom.main.textContent),'No notice on Users and Roles while auto sign-out is off');
+    return `First user → ${DEFAULT_AUTO_LOCK_MINUTES} minutes; an existing choice is kept; a notice shows while it is off`;
+   }finally{clearTimeout(this.idleTimer);this.idleTimer=null;this.state=this.migrate(snapshot,{clearSession:false});this.state.backups=backups;await this.save();}
   });
   /* QA10 fix (P10): restoring the pre-run workspace can change who is signed in (the suite signs
      itself in; the original state may not have been). The nav was left rendered for the OLD
